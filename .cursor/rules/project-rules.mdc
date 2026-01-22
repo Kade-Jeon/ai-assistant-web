@@ -1,0 +1,161 @@
+---
+name: project-rules
+description: Frontend development rules for Vue projects
+---
+
+# Overview
+
+## 1. Component Structure & Separation
+- Vue code must follow the **Single Responsibility Principle (SRP)**.
+- Page-level screens must be implemented as `pages` or `views`.
+- Reusable UI elements must be extracted into separate components.
+  - Examples: buttons, cards, modals, list items
+- A single component should not exceed **300 lines of code**.
+- If business logic becomes complex, it must be extracted into **Composables (`useXXX`)**.
+
+---
+
+## 2. File & Folder Naming
+- Component filenames must use **PascalCase**.
+  - Example: `UserProfileCard.vue`
+- Composables must use the `use` prefix.
+  - Example: `useAuth.ts`, `usePagination.ts`
+- Folder names must be consistently written in **kebab-case** or **camelCase**.
+- Each folder should contain only **closely related components**.
+
+---
+
+## 3. Template Rules
+- Minimize logic inside templates.
+- Complex logic must be moved to `computed` properties or methods.
+- Do not place complex conditional expressions directly inside `v-if`.
+- Always provide a `key` when using `v-for`.
+- Avoid inline styles and use class-based styling instead.
+
+---
+
+## 4. Script Rules
+- Prefer the **Composition API** (`setup`, `ref`, `computed`).
+- State ownership priority must follow this order:
+  1. props  
+  2. local state (`ref`, `reactive`)  
+  3. composables  
+  4. global store (e.g. Pinia)
+- All props must have explicit types.
+- Event names must be **semantic and action-oriented**.
+  - ❌ `clickHandler`
+  - ✅ `submitForm`, `confirmDelete`
+
+### Component Interface Rules
+- Define props at the top of the component and treat them as immutable.
+- Avoid passing functions via props; use **events (`emits`)** instead.
+- Emit event names must be clear verbs.
+  - Examples: `submit`, `confirm`, `close`
+- The parent component is solely responsible for state mutations.
+
+### v-model Usage Rules
+- Use `v-model` only for clear user-input components.
+- For general UI state, prefer the **props + emits** pattern.
+- Custom `v-model` implementations must follow:
+  - `modelValue`
+  - `update:modelValue`
+
+### Conditional Rendering Rules
+- Use `v-show` for frequently toggled UI elements.
+- Use `v-if` for elements that are not required during initial render.
+- Avoid using `v-if` and `v-for` on the same element.
+
+### UI State Handling
+- Explicitly handle **loading**, **error**, and **empty** states in the UI.
+- Rendering logic must account for empty or missing data.
+- Error messages should be user-friendly and human-readable.
+
+---
+
+## 5. State & Store Rules
+- Keep global state to a minimum.
+- Do not store simple UI state (e.g. modal open, tab index) in the global store.
+- Separate API response transformation logic from state management.
+- Do not place UI-related logic inside stores.
+
+---
+
+## 6. API & Async Handling
+- Do not write API calls directly inside components.
+- API logic must be separated into `services` or `api` layers.
+- Always handle errors explicitly using `try-catch`.
+- Loading and error states must be properly managed.
+
+---
+
+## 7. Styling Rules (Tailwind CSS)
+- Tailwind CSS utility classes are the **default styling approach**.
+- Avoid using `<style>` blocks; use them only when absolutely necessary.
+- Inline styles (`style=""`) are forbidden.
+
+### Class Ordering
+- Classes should be ordered as follows:
+  **layout → position → size → spacing → typography → color → misc**
+- If a single element has too many classes:
+  - Extract it into a meaningful component, or
+  - Refactor common patterns into reusable components
+- Conditional styles must be handled explicitly using `:class`.
+
+### Reusability
+- Do not copy-paste Tailwind class sets for repeated UI patterns.
+- For repeated styles:
+  - Create a dedicated component, or
+  - Consider using `@apply` (use sparingly).
+
+### Design Consistency
+- Colors, font sizes, and spacing must use Tailwind tokens or values defined in `tailwind.config.js`.
+- Avoid arbitrary values such as `w-[123px]` or `text-[#123456]`.
+- Responsive design must use Tailwind breakpoints (`sm`, `md`, `lg`, `xl`).
+
+### State & Interaction
+- Use Tailwind modifiers for UI states:
+  - `hover`, `focus`, `active`, `disabled`
+  - Example: `hover:bg-gray-100`, `disabled:opacity-50`
+- Prefer Tailwind utilities for animations and transitions.
+
+### Responsive Design
+- The UI must remain usable and visually consistent across **mobile, tablet, and desktop** devices.
+- Responsive behavior must be implemented using **Tailwind CSS breakpoints**.
+  - `sm`, `md`, `lg`, `xl`
+- Layouts must be designed with a **mobile-first approach**.
+- Do not rely on fixed widths that break responsiveness.
+- Components must adapt gracefully to different screen sizes without layout overflow or content clipping.
+
+### Prohibited Styling
+- Do not define global CSS that duplicates Tailwind functionality.
+- Do not apply inconsistent styling rules across components.
+- Do not bypass Tailwind with excessive custom CSS.
+
+---
+
+## 8. Comments & Readability
+- Comments should explain **why**, not **what**.
+- Complex logic must include explanatory comments.
+- Each line of code should have a single responsibility.
+
+---
+
+## 9. Prohibited Practices
+- Do not handle API calls, state management, and rendering logic in a single component.
+- Never mutate props directly.
+- Avoid magic numbers and magic strings.
+- Do not leave unused components, variables, or imports in the codebase.
+
+---
+
+## 10. Review Checklist
+- Is the code reusable?
+- Is the structure testable and extensible?
+- Is the component’s responsibility clear from its name?
+- Is state ownership appropriate?
+
+---
+
+## Decision Priority
+- When rules are ambiguous, prioritize decisions in the following order:
+  **readability → reusability → performance**
