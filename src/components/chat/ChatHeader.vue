@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Bot, Moon, Sun } from "lucide-vue-next"
+import { Menu, Moon, Sun } from "lucide-vue-next"
 import { Button } from "@/components/ui/button"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 
 const props = withDefaults(defineProps<{
   isDark: boolean
+  isSidebarOpen: boolean
   modelName?: string
   hintText?: string
 }>(), {
@@ -14,17 +14,21 @@ const props = withDefaults(defineProps<{
 
 defineEmits<{
   (e: "toggle-theme"): void
+  (e: "toggle-sidebar"): void
 }>()
 </script>
 
 <template>
   <header class="flex items-center justify-between h-12 px-4 border-b">
-    <div class="flex items-center gap-2">
-      <SidebarTrigger />
-      <div class="flex items-center gap-2 px-2.5 py-1 text-sm font-medium bg-muted rounded-md">
+    <div class="flex items-center gap-2 min-w-0">
+      <Button variant="ghost" size="icon" class="h-8 w-8" @click="$emit('toggle-sidebar')">
+        <Menu class="h-4 w-4" />
+        <span class="sr-only">사이드바 토글</span>
+      </Button>
+      <!-- <div class="flex items-center max-w-xs min-w-0 gap-2 px-2.5 py-1 text-sm font-medium bg-muted rounded-md">
         <Bot class="h-4 w-4" />
-        <span>{{ props.modelName }}</span>
-      </div>
+        <span class="truncate">{{ props.modelName }}</span>
+      </div> -->
     </div>
     <div class="flex items-center gap-2">
       <span class="text-xs text-muted-foreground">{{ props.hintText }}</span>

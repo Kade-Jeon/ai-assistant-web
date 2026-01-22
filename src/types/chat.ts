@@ -11,4 +11,5 @@ export interface ChatMessage {
   role: ChatRole
   content: string
   time: string
+  attachments?: File[]
 }
