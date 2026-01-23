@@ -4,6 +4,7 @@ export interface ChatThread {
   id: string
   title: string
   active: boolean
+  conversationId: string
 }
 
 export interface ChatMessage {

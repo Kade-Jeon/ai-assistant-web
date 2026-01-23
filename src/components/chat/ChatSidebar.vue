@@ -12,6 +12,7 @@ defineProps<{
 defineEmits<{
   (e: "new-chat"): void
   (e: "dashboard"): void
+  (e: "select-thread"): [conversationId: string]
 }>()
 </script>
 
@@ -26,7 +27,7 @@ defineEmits<{
   >
     <div v-if="isOpen" class="w-64 bg-sidebar border-r flex flex-col h-full">
       <ChatSidebarHeader @new-chat="$emit('new-chat')" />
-      <ChatSidebarContent :threads="threads" @dashboard="$emit('dashboard')" />
+      <ChatSidebarContent :threads="threads" @dashboard="$emit('dashboard')" @select-thread="$emit('select-thread', $event)" />
       <ChatSidebarFooter />
     </div>
   </transition>

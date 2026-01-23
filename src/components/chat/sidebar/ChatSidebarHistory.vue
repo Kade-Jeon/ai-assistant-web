@@ -5,6 +5,10 @@ import type { ChatThread } from "@/types/chat"
 defineProps<{
   threads: ChatThread[]
 }>()
+
+defineEmits<{
+  (e: "select-thread"): [conversationId: string]
+}>()
 </script>
 
 <template>
@@ -18,6 +22,7 @@ defineProps<{
           :key="thread.id"
           class="w-full flex items-center gap-2 px-2 py-2 text-sm rounded-md hover:bg-sidebar-accent text-left"
           :class="thread.active ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground'"
+          @click="$emit('select-thread', thread.conversationId)"
         >
           <MessageSquare class="h-4 w-4" />
           <span class="truncate">{{ thread.title }}</span>

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { nextTick, watch, ref } from "vue"
 import { Bot, User, Paperclip, FileText, FileSpreadsheet, Presentation } from "lucide-vue-next"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { ChatMessage, ChatRole } from "@/types/chat"
 
 const props = defineProps<{
   messages: ChatMessage[]
   isSidebarOpen: boolean
+  isLoading?: boolean
 }>()
 
 const isUserRole = (role: ChatRole) => role === "user"
@@ -77,11 +79,27 @@ const getFileColor = (fileName: string) => {
         ? 'transition-all duration-150 ease-out max-w-2xl pt-6 pb-8'
         : 'transition-all duration-250 ease-out delay-75 max-w-3xl pt-6 pb-8'
     ]">
-      <div v-if="props.messages.length === 0" class="py-16 text-sm text-center text-muted-foreground">
+      <!-- 로딩 중일 때 스켈레톤 표시 -->
+      <div v-if="props.isLoading" class="space-y-4">
+        <div v-for="i in 3" :key="i" class="flex flex-col gap-2">
+          <div :class="i % 2 === 0 ? 'justify-end' : 'justify-start'">
+            <div class="max-w-xl px-4 py-3 rounded-2xl shadow-sm bg-muted">
+              <Skeleton class="h-4 w-full mb-2" />
+              <Skeleton class="h-4 w-3/4" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 메시지가 없을 때 -->
+      <div v-else-if="props.messages.length === 0" class="py-16 text-sm text-center text-muted-foreground">
         아직 대화가 없어요. 메시지를 입력해 시작하세요.
       </div>
+
+      <!-- 실제 메시지들 -->
       <div v-else>
-        <div v-for="message in props.messages" :key="message.id" class="flex flex-col gap-2 mb-3">
+        <transition-group name="message" tag="div" class="space-y-3">
+          <div v-for="message in props.messages" :key="message.id" class="flex flex-col gap-2">
           <div class="flex" :class="isUserRole(message.role) ? 'justify-end' : 'justify-start'">
             <div
               class="max-w-xl px-4 py-3 text-sm leading-6 rounded-2xl shadow-sm"
@@ -119,8 +137,45 @@ const getFileColor = (fileName: string) => {
             <span>•</span>
             <span>{{ message.time }}</span>
           </div>
-        </div>
+          </div>
+        </transition-group>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 메시지 애니메이션 */
+.message-enter-active,
+.message-leave-active {
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.message-enter-from {
+  opacity: 0;
+  transform: translateY(30px) scale(0.95);
+}
+
+.message-leave-to {
+  opacity: 0;
+  transform: translateY(-30px) scale(0.95);
+}
+
+.message-move {
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 스켈레톤 애니메이션 강화 */
+.message-enter-active .skeleton-loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+</style>
