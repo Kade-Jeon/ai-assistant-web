@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Menu, Moon, Sun } from "lucide-vue-next"
+import { Menu, Moon, Sun, PanelLeftClose, PanelRightClose } from "lucide-vue-next"
 import { Button } from "@/components/ui/button"
 
 const props = withDefaults(defineProps<{
@@ -22,7 +22,8 @@ defineEmits<{
   <header class="flex items-center justify-between h-12 px-4 border-b">
     <div class="flex items-center gap-2 min-w-0">
       <Button variant="ghost" size="icon" class="h-8 w-8" @click="$emit('toggle-sidebar')">
-        <Menu class="h-4 w-4" />
+        <PanelLeftClose v-if="isSidebarOpen" class="h-4 w-4" />
+        <PanelRightClose v-else class="h-4 w-4" />
         <span class="sr-only">사이드바 토글</span>
       </Button>
       <!-- <div class="flex items-center max-w-xs min-w-0 gap-2 px-2.5 py-1 text-sm font-medium bg-muted rounded-md">

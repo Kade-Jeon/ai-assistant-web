@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Bot, User, Paperclip } from "lucide-vue-next"
+import { nextTick, watch, ref } from "vue"
+import { Bot, User, Paperclip, FileText, FileSpreadsheet, Presentation } from "lucide-vue-next"
 import type { ChatMessage, ChatRole } from "@/types/chat"
 
 const props = defineProps<{
@@ -9,15 +10,72 @@ const props = defineProps<{
 
 const isUserRole = (role: ChatRole) => role === "user"
 const getRoleLabel = (role: ChatRole) => (isUserRole(role) ? "나" : "ChatGPT")
+
+// 자동 스크롤을 위한 ref
+const messageContainer = ref<HTMLDivElement>()
+
+// 메시지가 변경될 때마다 스크롤을 맨 아래로 이동
+watch(() => props.messages, async () => {
+  await nextTick()
+  if (messageContainer.value) {
+    messageContainer.value.scrollTop = messageContainer.value.scrollHeight
+  }
+}, { deep: true })
+
+const getFileIcon = (fileName: string) => {
+  const extension = fileName.split('.').pop()?.toLowerCase()
+  switch (extension) {
+    case 'doc':
+    case 'docx':
+    case 'hwp':
+    case 'hwxp':
+    case 'txt':
+      return FileText
+    case 'pdf':
+      return FileText
+    case 'ppt':
+    case 'pptx':
+      return Presentation
+    case 'xlsx':
+    case 'xls':
+      return FileSpreadsheet
+    default:
+      return Paperclip
+  }
+}
+
+const getFileColor = (fileName: string) => {
+  const extension = fileName.split('.').pop()?.toLowerCase()
+  switch (extension) {
+    case 'doc':
+    case 'docx':
+      return 'text-blue-600'
+    case 'hwp':
+    case 'hwxp':
+      return 'text-blue-300'
+    case 'pdf':
+      return 'text-red-500'
+    case 'ppt':
+    case 'pptx':
+      return 'text-orange-500'
+    case 'xlsx':
+    case 'xls':
+      return 'text-green-700'
+    case 'txt':
+      return 'text-slate-500'
+    default:
+      return 'text-muted-foreground'
+  }
+}
 </script>
 
 <template>
-  <div class="flex-1 overflow-y-auto">
+  <div ref="messageContainer" class="flex-1 overflow-y-auto">
     <div :class="[
-      'flex flex-col w-full gap-6 mx-auto px-4 py-6',
+      'flex flex-col w-full gap-6 mx-auto px-4',
       props.isSidebarOpen
-        ? 'transition-all duration-150 ease-out max-w-2xl'
-        : 'transition-all duration-250 ease-out delay-75 max-w-3xl'
+        ? 'transition-all duration-150 ease-out max-w-2xl pt-6 pb-8'
+        : 'transition-all duration-250 ease-out delay-75 max-w-3xl pt-6 pb-8'
     ]">
       <div v-if="props.messages.length === 0" class="py-16 text-sm text-center text-muted-foreground">
         아직 대화가 없어요. 메시지를 입력해 시작하세요.
@@ -35,13 +93,18 @@ const getRoleLabel = (role: ChatRole) => (isUserRole(role) ? "나" : "ChatGPT")
                 <div
                   v-for="(file, index) in message.attachments"
                   :key="index"
-                  class="flex items-center gap-2 p-2 bg-opacity-20 rounded-md"
-                  :class="isUserRole(message.role) ? 'bg-background' : 'bg-foreground'"
+                  class="flex items-center gap-3 p-3 border rounded-lg bg-card/50 hover:bg-card/80 transition-colors"
+                  :class="isUserRole(message.role) ? 'border-border' : 'border-border/50'"
                 >
-                  <Paperclip class="h-3 w-3 flex-shrink-0" />
-                  <div class="flex-1 min-w-0">
-                    <p class="text-xs font-medium truncate">{{ file.name }}</p>
-                    <p class="text-xs opacity-70">{{ (file.size / 1024 / 1024).toFixed(1) }}MB</p>
+                  <component
+                    :is="getFileIcon(file.name)"
+                    :class="['h-4 w-4 flex-shrink-0', getFileColor(file.name)]"
+                  />
+                  <div class="flex-1 min-w-0 space-y-1">
+                    <p class="text-sm font-medium truncate leading-tight">{{ file.name }}</p>
+                    <p class="text-xs text-muted-foreground">
+                      {{ (file.size / 1024 / 1024).toFixed(1) }} MB
+                    </p>
                   </div>
                 </div>
               </div>

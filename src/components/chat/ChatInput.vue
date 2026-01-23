@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue"
-import { Paperclip } from "lucide-vue-next"
+import { Paperclip, File, FileText, FileType, FileChartPie, Sheet } from "lucide-vue-next"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -52,24 +52,79 @@ const handleFileChange = (event: Event) => {
 const removeFile = (index: number) => {
   selectedFiles.value.splice(index, 1)
 }
+
+const getFileIcon = (fileName: string) => {
+  const extension = fileName.split('.').pop()?.toLowerCase()
+  switch (extension) {
+    case 'doc':
+    case 'docx':
+    case 'hwp':
+    case 'hwxp':
+    case 'pdf':
+      return FileText
+    case 'txt':
+      return FileType
+    case 'ppt':
+    case 'pptx':
+      return FileChartPie
+    case 'xlsx':
+    case 'xls':
+      return Sheet
+    default:
+      return File
+  }
+}
+
+const getFileColor = (fileName: string) => {
+  const extension = fileName.split('.').pop()?.toLowerCase()
+  switch (extension) {
+    case 'doc':
+    case 'docx':
+      return 'text-blue-600'
+    case 'hwp':
+    case 'hwxp':
+      return 'text-blue-300'
+    case 'pdf':
+      return 'text-red-500'
+    case 'ppt':
+    case 'pptx':
+      return 'text-orange-500'
+    case 'xlsx':
+    case 'xls':
+      return 'text-green-700'
+    case 'txt':
+      return 'text-slate-500'
+    default:
+      return 'text-muted-foreground'
+  }
+}
 </script>
 
 <template>
-  <div class="bg-background border-t">
+  <div class="bg-background border-t flex-shrink-0">
     <div class="w-full max-w-3xl mx-auto px-4 py-4">
       <!-- 선택된 파일 목록 -->
-      <div v-if="selectedFiles.length > 0" class="mb-2 space-y-1">
+      <div v-if="selectedFiles.length > 0" class="mb-3 space-y-2">
         <div
           v-for="(file, index) in selectedFiles"
           :key="index"
-          class="flex items-center gap-2 p-2 bg-muted rounded-md text-sm"
+          class="flex items-center gap-3 p-3 bg-muted/50 border border-border/50 rounded-lg hover:bg-muted/80 transition-colors"
         >
-          <span class="flex-1 truncate">{{ file.name }}</span>
-          <span class="text-muted-foreground text-xs">({{ (file.size / 1024 / 1024).toFixed(1) }}MB)</span>
+          <component
+            :is="getFileIcon(file.name)"
+            :class="['h-4 w-4 flex-shrink-0', getFileColor(file.name)]"
+          />
+          <div class="flex-1 min-w-0 space-y-1">
+            <p class="text-sm font-medium truncate leading-tight">{{ file.name }}</p>
+            <p class="text-xs text-muted-foreground">
+              {{ (file.size / 1024 / 1024).toFixed(1) }} MB
+            </p>
+          </div>
           <button
             @click="removeFile(index)"
-            class="text-muted-foreground hover:text-foreground"
+            class="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
             type="button"
+            title="파일 제거"
           >
             ×
           </button>
@@ -84,7 +139,7 @@ const removeFile = (index: number) => {
           class="h-9 px-3"
           @click="handleFileSelect"
           type="button"
-          title="첨부파일 추가 (DOC, DOCX, HWP, HWXP, PDF, PPT, PPTX, XLSX, XLS)"
+          title="첨부파일 추가 (DOC, DOCX, HWP, HWXP, PDF, PPT, PPTX, XLSX, XLS, TXT)"
         >
           <Paperclip class="h-4 w-4" />
         </Button>
@@ -111,7 +166,7 @@ const removeFile = (index: number) => {
         multiple
         class="hidden"
         @change="handleFileChange"
-        accept=".doc,.docx,.hwp,.hwxp,.pdf,.ppt,.pptx,.xlsx,.xls"
+        accept=".doc,.docx,.hwp,.hwxp,.pdf,.ppt,.pptx,.xlsx,.xls,.txt"
       />
 
       <p class="mt-2 text-xs text-center text-muted-foreground">
