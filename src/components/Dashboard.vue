@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from "vue"
+import type { PeriodType } from "@/composables/useChartData"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useChartData } from "@/composables/useChartData"
+import { LineChart } from "@/components/ui/chart-line"
+// Skeleton 컴포넌트는 shadcn-vue에서 제공되지 않으므로 간단한 로딩 표시로 대체
 
 const props = defineProps<{
   isVisible: boolean
@@ -76,14 +81,6 @@ onUnmounted(() => {
   animationIntervals = []
 })
 
-const chartData = [
-  { month: "1월", conversations: 120, users: 45 },
-  { month: "2월", conversations: 150, users: 52 },
-  { month: "3월", conversations: 180, users: 61 },
-  { month: "4월", conversations: 220, users: 78 },
-  { month: "5월", conversations: 280, users: 95 },
-  { month: "6월", conversations: 320, users: 112 },
-]
 
 const recentActivities = [
   { action: "새 대화 시작", user: "김철수", time: "방금 전" },
@@ -91,6 +88,43 @@ const recentActivities = [
   { action: "설정 변경", user: "박민수", time: "10분 전" },
   { action: "로그아웃", user: "정수진", time: "15분 전" },
 ]
+
+// 기간 선택 옵션
+const periodOptions = [
+  { value: 7, label: "7일" },
+  { value: 15, label: "15일" },
+  { value: 30, label: "30일" },
+] as const
+
+// 선택된 기간 (기본값: 7일)
+const selectedPeriod = ref<PeriodType>(7)
+
+// 차트 데이터 관련
+const { fetchDailyUsageData } = useChartData()
+const chartData = ref<Array<{ date: string; usage: number }>>([])
+const isChartLoading = ref(false)
+
+// 차트 데이터 로딩 함수
+const loadChartData = async (period: PeriodType) => {
+  try {
+    isChartLoading.value = true
+    const data = await fetchDailyUsageData(period)
+    console.log('차트 데이터 로드됨:', data)
+    chartData.value = data
+  } catch (error) {
+    console.error('차트 데이터 로딩 실패:', error)
+    // 에러 시 빈 배열로 설정
+    chartData.value = []
+  } finally {
+    isChartLoading.value = false
+  }
+}
+
+// 기간 변경 시 차트 데이터 다시 로딩
+watch(selectedPeriod, (newPeriod) => {
+  loadChartData(newPeriod)
+}, { immediate: true })
+
 </script>
 
 <template>
@@ -114,10 +148,10 @@ const recentActivities = [
       >
         <div class="flex items-center justify-between">
           <div class="space-y-2">
-            <Skeleton v-if="isLoading" class="h-4 w-20" />
-            <Skeleton v-else class="h-4 w-16" />
+            <div v-if="isLoading" class="h-4 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+            <div v-else></div>
             <div v-if="isLoading">
-              <Skeleton class="h-8 w-16" />
+              <div class="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
             </div>
             <div v-else class="space-y-1">
               <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ stats[i - 1]?.title }}</p>
@@ -125,7 +159,7 @@ const recentActivities = [
             </div>
           </div>
           <div v-if="isLoading">
-            <Skeleton class="h-5 w-12" />
+            <div class="h-5 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
           </div>
           <div v-else :class="stats[i - 1]?.changeType === 'positive' ? 'text-green-600' : 'text-red-600'" class="text-sm font-medium">
             {{ stats[i - 1]?.change }}
@@ -139,54 +173,61 @@ const recentActivities = [
       <!-- 차트 영역 -->
       <div class="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div v-if="isLoading" class="space-y-4">
-          <Skeleton class="h-6 w-24" />
+          <div class="h-6 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
           <div class="flex items-end justify-between h-64">
-            <Skeleton v-for="i in 6" :key="i" class="w-8 h-32" :class="i % 2 === 0 ? 'h-24' : 'h-40'" />
+            <div v-for="i in 6" :key="i" class="w-8 h-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" :class="i % 2 === 0 ? 'h-24' : 'h-40'"></div>
           </div>
         </div>
         <div v-else>
-          <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">월별 통계</h2>
-        <div class="h-64 flex items-end justify-between space-x-2">
-          <div
-            v-for="data in chartData"
-            :key="data.month"
-            class="flex-1 flex flex-col items-center"
-          >
-            <!-- 대화 수 바 -->
-            <div
-              class="w-full bg-blue-500 rounded-t mb-1 transition-all duration-300 hover:bg-blue-600"
-              :style="{ height: `${(data.conversations / 400) * 180}px` }"
-            ></div>
-            <!-- 사용자 수 바 -->
-            <div
-              class="w-full bg-green-500 rounded-t transition-all duration-300 hover:bg-green-600"
-              :style="{ height: `${(data.users / 150) * 180}px` }"
-            ></div>
-            <span class="text-xs text-gray-600 dark:text-gray-400 mt-2">{{ data.month }}</span>
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">일별 사용량</h2>
+            <Select v-model="selectedPeriod">
+              <SelectTrigger class="w-full sm:w-24">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="option in periodOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </div>
-        <div class="flex justify-center space-x-6 mt-4">
-          <div class="flex items-center">
-            <div class="w-3 h-3 bg-blue-500 rounded mr-2"></div>
-            <span class="text-sm text-gray-600 dark:text-gray-400">대화 수</span>
+          <div v-if="isChartLoading" class="h-48 sm:h-64 flex items-center justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
-          <div class="flex items-center">
-            <div class="w-3 h-3 bg-green-500 rounded mr-2"></div>
-            <span class="text-sm text-gray-600 dark:text-gray-400">사용자 수</span>
+          <div v-else-if="chartData.length === 0" class="h-48 sm:h-64 flex items-center justify-center text-gray-500">
+            데이터를 불러올 수 없습니다.
           </div>
-        </div>
+          <LineChart
+            v-else
+            :data="chartData"
+            :categories="['usage']"
+            index="date"
+            :colors="['#3b82f6']"
+            class="h-48 sm:h-64"
+            :show-legend="false"
+            :show-x-axis="true"
+            :show-y-axis="true"
+            :show-dots="true"
+            :show-tooltip="true"
+            :selected-period="selectedPeriod"
+          />
         </div>
       </div>
 
       <!-- 최근 활동 -->
       <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div v-if="isLoading" class="space-y-4">
-          <Skeleton class="h-6 w-20 mb-4" />
+          <div class="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-4"></div>
           <div v-for="i in 4" :key="i" class="flex items-start space-x-3">
-            <Skeleton class="w-2 h-2 rounded-full mt-2" />
+            <div class="w-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full mt-2 animate-pulse"></div>
             <div class="flex-1 space-y-2">
-              <Skeleton class="h-4 w-3/4" />
-              <Skeleton class="h-3 w-1/2" />
+              <div class="h-4 w-3/4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+              <div class="h-3 w-1/2 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
             </div>
           </div>
         </div>
@@ -214,10 +255,10 @@ const recentActivities = [
       <!-- 시스템 상태 -->
       <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div v-if="isLoading" class="space-y-3">
-          <Skeleton class="h-6 w-20 mb-4" />
+          <div class="h-6 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-4"></div>
           <div v-for="i in 4" :key="i" class="flex justify-between items-center">
-            <Skeleton class="h-4 w-24" />
-            <Skeleton class="h-4 w-12" />
+            <div class="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
+            <div class="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
           </div>
         </div>
         <div v-else>
@@ -246,10 +287,10 @@ const recentActivities = [
       <!-- 빠른 액션 -->
       <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div v-if="isLoading" class="space-y-3">
-          <Skeleton class="h-6 w-16 mb-4" />
-          <div v-for="i in 3" :key="i" class="p-3 rounded-lg border">
-            <Skeleton class="h-5 w-32 mb-1" />
-            <Skeleton class="h-4 w-48" />
+          <div class="h-6 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-4"></div>
+          <div v-for="i in 3" :key="i" class="p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+            <div class="h-5 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-1"></div>
+            <div class="h-4 w-48 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"></div>
           </div>
         </div>
         <div v-else>
