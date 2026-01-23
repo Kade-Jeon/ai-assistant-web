@@ -98,18 +98,9 @@ const recentActivities = [
     <!-- 헤더 -->
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-4">
-        <button
-          @click="$emit('back-to-chat')"
-          class="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-          </svg>
-          채팅으로 돌아가기
-        </button>
         <div>
           <h1 class="text-3xl font-bold text-gray-900 dark:text-white">대시보드</h1>
-          <p class="text-gray-600 dark:text-gray-400">실시간 채팅 통계 및 분석</p>
+          <p class="text-gray-600 dark:text-gray-400">AI 사용량 통계 및 분석</p>
         </div>
       </div>
     </div>
