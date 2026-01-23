@@ -16,9 +16,21 @@ const { canSend, messageInput, messages, threads, isLoading, sendMessage, startN
 // 현재 뷰 상태 ('chat' | 'dashboard')
 const currentView = ref<'chat' | 'dashboard'>('chat')
 
-const handleDashboard = () => {
-  console.log('대시보드 클릭됨, 현재 view:', currentView.value)
-  currentView.value = 'dashboard'
+// 공통 뷰 변경 핸들러
+const handleViewChange = (view: 'chat' | 'dashboard', conversationId?: string) => {
+  console.log(`뷰 변경: ${currentView.value} → ${view}`, conversationId ? `(대화: ${conversationId})` : '')
+
+  // 대화 선택인 경우 selectThread 호출
+  if (conversationId) {
+    selectThread(conversationId)
+  }
+
+  // 새 채팅 시작인 경우 startNewChat 호출 (conversationId가 undefined일 때)
+  if (view === 'chat' && !conversationId) {
+    startNewChat()
+  }
+
+  currentView.value = view
   console.log('변경 후 view:', currentView.value)
 
   // 모바일에서는 사이드바 자동 닫힘
@@ -27,36 +39,18 @@ const handleDashboard = () => {
       isSidebarOpen.value = false
     })
   }
-}
 
-const handleSelectThread = (conversationId: string) => {
-  console.log('handleSelectThread called with:', conversationId)
-  selectThread(conversationId)
-  currentView.value = 'chat'
-  console.log('currentView set to chat')
-
-  // 모바일에서는 사이드바 자동 닫힘
-  if (isMobile.value) {
+  // 대화 선택인 경우 추가 nextTick
+  if (conversationId) {
     nextTick(() => {
-      isSidebarOpen.value = false
-    })
-  }
-
-  nextTick()
-  console.log('nextTick completed')
-}
-
-const handleNewChat = () => {
-  startNewChat()
-  currentView.value = 'chat'
-
-  // 모바일에서는 사이드바 자동 닫힘
-  if (isMobile.value) {
-    nextTick(() => {
-      isSidebarOpen.value = false
+      console.log('nextTick completed')
     })
   }
 }
+
+const handleDashboard = () => handleViewChange('dashboard')
+const handleSelectThread = (conversationId: string) => handleViewChange('chat', conversationId)
+const handleNewChat = () => handleViewChange('chat')
 </script>
 
 <template>
@@ -68,7 +62,7 @@ const handleNewChat = () => {
         <!-- 채팅 뷰 -->
         <div v-show="currentView === 'chat'" class="flex-1 flex flex-col min-h-0">
           <ChatMessageList :messages="messages" :is-sidebar-open="isSidebarOpen" :is-loading="isLoading" />
-          <ChatInput v-model="messageInput" :can-send="canSend" @send="(value) => sendMessage(value)" />
+          <ChatInput v-model="messageInput" :can-send="canSend" @send="(value, attachments) => sendMessage(value, attachments)" />
         </div>
 
         <!-- 대시보드 뷰 -->
