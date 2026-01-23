@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import ChatSidebarHeader from "./ChatSidebarHeader.vue"
-import ChatSidebarContent from "./ChatSidebarContent.vue"
-import ChatSidebarFooter from "./ChatSidebarFooter.vue"
+import ChatSidebarHeader from "./sidebar/ChatSidebarHeader.vue"
+import ChatSidebarContent from "./sidebar/ChatSidebarContent.vue"
+import ChatSidebarFooter from "./sidebar/ChatSidebarFooter.vue"
 import type { ChatThread } from "@/types/chat"
 
 defineProps<{

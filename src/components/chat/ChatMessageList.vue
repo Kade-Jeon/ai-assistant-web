@@ -72,7 +72,7 @@ const getFileColor = (fileName: string) => {
 <template>
   <div ref="messageContainer" class="flex-1 overflow-y-auto">
     <div :class="[
-      'flex flex-col w-full gap-6 mx-auto px-4',
+      'flex flex-col w-full gap-6 mx-auto',
       props.isSidebarOpen
         ? 'transition-all duration-150 ease-out max-w-2xl pt-6 pb-8'
         : 'transition-all duration-250 ease-out delay-75 max-w-3xl pt-6 pb-8'

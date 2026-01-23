@@ -104,30 +104,30 @@ const getFileColor = (fileName: string) => {
   <div class="bg-background border-t flex-shrink-0">
     <div class="w-full max-w-3xl mx-auto px-4 py-4">
       <!-- 선택된 파일 목록 -->
-      <div v-if="selectedFiles.length > 0" class="mb-3 space-y-2">
-        <div
-          v-for="(file, index) in selectedFiles"
-          :key="index"
-          class="flex items-center gap-3 p-3 bg-muted/50 border border-border/50 rounded-lg hover:bg-muted/80 transition-colors"
-        >
-          <component
-            :is="getFileIcon(file.name)"
-            :class="['h-4 w-4 flex-shrink-0', getFileColor(file.name)]"
-          />
-          <div class="flex-1 min-w-0 space-y-1">
-            <p class="text-sm font-medium truncate leading-tight">{{ file.name }}</p>
-            <p class="text-xs text-muted-foreground">
-              {{ (file.size / 1024 / 1024).toFixed(1) }} MB
-            </p>
-          </div>
-          <button
-            @click="removeFile(index)"
-            class="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors"
-            type="button"
-            title="파일 제거"
+      <div v-if="selectedFiles.length > 0" class="mb-3">
+        <div class="flex flex-wrap gap-2">
+          <div
+            v-for="(file, index) in selectedFiles"
+            :key="index"
+            class="inline-flex items-center gap-2 px-3 py-1 bg-muted/80 border border-border/30 rounded-full text-sm hover:bg-muted transition-colors"
           >
-            ×
-          </button>
+            <component
+              :is="getFileIcon(file.name)"
+              :class="['h-3 w-3 flex-shrink-0', getFileColor(file.name)]"
+            />
+            <span class="truncate max-w-32">{{ file.name }}</span>
+            <span class="text-xs text-muted-foreground">
+              {{ (file.size / 1024 / 1024).toFixed(1) }}MB
+            </span>
+            <button
+              @click="removeFile(index)"
+              class="text-muted-foreground hover:text-foreground ml-1 rounded-full hover:bg-muted/50 p-0.5 transition-colors"
+              type="button"
+              title="파일 제거"
+            >
+              ×
+            </button>
+          </div>
         </div>
       </div>
 
