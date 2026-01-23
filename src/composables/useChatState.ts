@@ -2,11 +2,24 @@ import { computed, onMounted, ref } from "vue"
 import type { ChatMessage, ChatThread } from "@/types/chat"
 import { useApi } from "@/composables/useApi"
 
-const createTimeLabel = () =>
-  new Date().toLocaleTimeString("ko-KR", {
+const createTimeLabel = () => {
+  const now = new Date()
+
+  // 날짜 부분 (2025.01.23)
+  const dateStr = now.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).replace(/\./g, '').replace(/ /g, '.')
+
+  // 시간 부분 (오전 11:14)
+  const timeStr = now.toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
   })
+
+  return `${dateStr} ${timeStr}`
+}
 
 const createId = () => crypto.randomUUID()
 

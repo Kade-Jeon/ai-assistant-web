@@ -11,7 +11,7 @@ const props = defineProps<{
 }>()
 
 const isUserRole = (role: ChatRole) => role === "user"
-const getRoleLabel = (role: ChatRole) => (isUserRole(role) ? "나" : "ChatGPT")
+const getRoleLabel = (role: ChatRole) => (isUserRole(role) ? "나" : "KadeAI")
 
 // 자동 스크롤을 위한 ref
 const messageContainer = ref<HTMLDivElement>()

@@ -28,25 +28,46 @@ const mockThreads: ChatThread[] = [
   },
 ]
 
+// 시간 생성 헬퍼 함수
+const createTimeString = (minutesAgo: number = 0) => {
+  const now = new Date()
+  const pastTime = new Date(now.getTime() - (minutesAgo * 60 * 1000))
+
+  // 날짜 부분 (2025.01.23)
+  const dateStr = pastTime.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).replace(/\./g, '').replace(/ /g, '.')
+
+  // 시간 부분 (오전 11:14)
+  const timeStr = pastTime.toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+
+  return `${dateStr} ${timeStr}`
+}
+
 const mockConversations: Record<string, ChatMessage[]> = {
   "conv_001": [
     {
       id: "m1",
       role: "assistant",
       content: "안녕하세요! 프로덕트 전략 정리에 대해 무엇을 도와드릴까요?",
-      time: "방금 전",
+      time: createTimeString(5), // 5분 전
     },
     {
       id: "m2",
       role: "user",
       content: "현재 우리 서비스의 주요 경쟁사 분석을 하고 싶어요.",
-      time: "5분 전",
+      time: createTimeString(4), // 4분 전
     },
     {
       id: "m3",
       role: "assistant",
       content: "좋은 접근입니다. 경쟁사 분석을 위해서는 다음과 같은 항목들을 고려해야 합니다:\n\n1. 시장 점유율\n2. 주요 기능 비교\n3. 가격 정책\n4. 사용자 피드백\n5. 기술 스택\n\n어떤 측면부터 시작해볼까요?",
-      time: "3분 전",
+      time: createTimeString(2), // 2분 전
     },
   ],
   "conv_002": [
@@ -54,13 +75,13 @@ const mockConversations: Record<string, ChatMessage[]> = {
       id: "m4",
       role: "assistant",
       content: "Vue 성능 최적화에 대해 이야기 나눠보죠. 어떤 부분에서 병목 현상이 발생하고 있나요?",
-      time: "방금 전",
+      time: createTimeString(15), // 15분 전
     },
     {
       id: "m5",
       role: "user",
       content: "리스트 렌더링이 느린 것 같아요. 수백 개의 아이템을 표시해야 하는데...",
-      time: "10분 전",
+      time: createTimeString(10), // 10분 전
     },
   ],
   "conv_003": [
@@ -68,7 +89,7 @@ const mockConversations: Record<string, ChatMessage[]> = {
       id: "m6",
       role: "assistant",
       content: "디자인 시스템의 톤앤매너를 정의하는 것은 정말 중요합니다. 현재 브랜드의 성격을 어떻게 정의하고 있나요?",
-      time: "방금 전",
+      time: createTimeString(8), // 8분 전
     },
   ],
   "conv_004": [
@@ -76,7 +97,7 @@ const mockConversations: Record<string, ChatMessage[]> = {
       id: "m7",
       role: "assistant",
       content: "온보딩 플로우 개선은 사용자 경험에 큰 영향을 미칩니다. 현재 어떤 문제가 있나요?",
-      time: "방금 전",
+      time: createTimeString(12), // 12분 전
     },
   ],
 }
