@@ -6,6 +6,7 @@ import type { ChatThread } from "@/types/chat"
 
 defineProps<{
   threads: ChatThread[]
+  currentView: 'chat' | 'dashboard'
 }>()
 
 defineEmits<{
@@ -16,6 +17,6 @@ defineEmits<{
 
 <template>
   <ChatSidebarSearch />
-  <ChatSidebarMenu @dashboard="$emit('dashboard')" />
+  <ChatSidebarMenu :currentView="currentView" @dashboard="$emit('dashboard')" />
   <ChatSidebarHistory :threads="threads" @select-thread="$emit('select-thread', $event)" />
 </template>

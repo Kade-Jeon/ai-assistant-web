@@ -99,7 +99,7 @@ const getFileColor = (fileName: string) => {
       <!-- 실제 메시지들 -->
       <div v-else>
         <transition-group name="message" tag="div" class="space-y-3">
-          <div v-for="message in props.messages" :key="message.id" class="flex flex-col gap-2">
+          <div v-for="message in props.messages" :key="message.id" class="flex flex-col gap-2 px-4">
           <div class="flex" :class="isUserRole(message.role) ? 'justify-end' : 'justify-start'">
             <div
               class="max-w-xl px-4 py-3 text-sm leading-6 rounded-2xl shadow-sm"

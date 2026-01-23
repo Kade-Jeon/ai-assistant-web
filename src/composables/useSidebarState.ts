@@ -17,5 +17,6 @@ export const useSidebarState = () => {
 
   return {
     isSidebarOpen,
+    isMobile,
   }
 }

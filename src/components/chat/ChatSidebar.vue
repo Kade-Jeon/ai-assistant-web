@@ -7,6 +7,7 @@ import type { ChatThread } from "@/types/chat"
 defineProps<{
   threads: ChatThread[]
   isOpen: boolean
+  currentView: 'chat' | 'dashboard'
 }>()
 
 defineEmits<{
@@ -27,7 +28,7 @@ defineEmits<{
   >
     <div v-if="isOpen" class="w-64 bg-sidebar border-r flex flex-col h-full">
       <ChatSidebarHeader @new-chat="$emit('new-chat')" />
-      <ChatSidebarContent :threads="threads" @dashboard="$emit('dashboard')" @select-thread="$emit('select-thread', $event)" />
+      <ChatSidebarContent :threads="threads" :currentView="currentView" @dashboard="$emit('dashboard')" @select-thread="$emit('select-thread', $event)" />
       <ChatSidebarFooter />
     </div>
   </transition>

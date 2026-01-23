@@ -10,7 +10,7 @@ import { useTheme } from "@/composables/useTheme"
 import { nextTick, ref } from "vue"
 
 const { isDark, toggleTheme } = useTheme()
-const { isSidebarOpen } = useSidebarState()
+const { isSidebarOpen, isMobile } = useSidebarState()
 const { canSend, messageInput, messages, threads, isLoading, sendMessage, startNewChat, selectThread } = useChatState()
 
 // 현재 뷰 상태 ('chat' | 'dashboard')
@@ -20,26 +20,48 @@ const handleDashboard = () => {
   console.log('대시보드 클릭됨, 현재 view:', currentView.value)
   currentView.value = 'dashboard'
   console.log('변경 후 view:', currentView.value)
+
+  // 모바일에서는 사이드바 자동 닫힘
+  if (isMobile.value) {
+    nextTick(() => {
+      isSidebarOpen.value = false
+    })
+  }
 }
 
-const handleSelectThread = async (conversationId: string) => {
+const handleSelectThread = (conversationId: string) => {
   console.log('handleSelectThread called with:', conversationId)
-  await selectThread(conversationId)
+  selectThread(conversationId)
   currentView.value = 'chat'
   console.log('currentView set to chat')
-  await nextTick()
+
+  // 모바일에서는 사이드바 자동 닫힘
+  if (isMobile.value) {
+    nextTick(() => {
+      isSidebarOpen.value = false
+    })
+  }
+
+  nextTick()
   console.log('nextTick completed')
 }
 
 const handleNewChat = () => {
   startNewChat()
   currentView.value = 'chat'
+
+  // 모바일에서는 사이드바 자동 닫힘
+  if (isMobile.value) {
+    nextTick(() => {
+      isSidebarOpen.value = false
+    })
+  }
 }
 </script>
 
 <template>
   <div class="flex h-screen">
-    <ChatSidebar :threads="threads" :is-open="isSidebarOpen" @new-chat="handleNewChat" @dashboard="handleDashboard" @select-thread="handleSelectThread" />
+    <ChatSidebar :threads="threads" :is-open="isSidebarOpen" :currentView="currentView" @new-chat="handleNewChat" @dashboard="handleDashboard" @select-thread="handleSelectThread" />
     <div class="flex-1 flex flex-col overflow-hidden">
       <ChatHeader :is-dark="isDark" :is-sidebar-open="isSidebarOpen" @toggle-theme="toggleTheme" @toggle-sidebar="isSidebarOpen = !isSidebarOpen" />
       <div class="flex-1 flex flex-col min-h-0">
