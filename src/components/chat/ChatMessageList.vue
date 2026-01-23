@@ -81,7 +81,7 @@ const getFileColor = (fileName: string) => {
         아직 대화가 없어요. 메시지를 입력해 시작하세요.
       </div>
       <div v-else>
-        <div v-for="message in props.messages" :key="message.id" class="flex flex-col gap-2">
+        <div v-for="message in props.messages" :key="message.id" class="flex flex-col gap-2 mb-3">
           <div class="flex" :class="isUserRole(message.role) ? 'justify-end' : 'justify-start'">
             <div
               class="max-w-xl px-4 py-3 text-sm leading-6 rounded-2xl shadow-sm"

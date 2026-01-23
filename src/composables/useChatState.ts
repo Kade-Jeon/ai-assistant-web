@@ -50,6 +50,7 @@ export const useChatState = () => {
       return
     }
 
+    // 사용자 메시지 추가
     messages.value = [
       ...messages.value,
       {
@@ -61,6 +62,19 @@ export const useChatState = () => {
       },
     ]
     messageInput.value = ""
+
+    // AI 응답 시뮬레이션 (테스트용)
+    setTimeout(() => {
+      messages.value = [
+        ...messages.value,
+        {
+          id: createId(),
+          role: "assistant",
+          content: "안녕하세요. 저는 AI, Kade 입니다. 현재는 테스트 기능을 수행중이며 정해진 내용을 답변합니다.",
+          time: createTimeLabel(),
+        },
+      ]
+    }, 1000) // 1초 후 응답
   }
 
   const startNewChat = () => {
