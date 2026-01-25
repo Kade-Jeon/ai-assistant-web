@@ -1,5 +1,6 @@
 import { computed, onMounted, ref } from "vue"
-import type { ChatMessage, ChatThread } from "@/types/chat"
+import type { AssistantRequest, ChatMessage, ChatThread } from "@/types/chat"
+import { PromptType } from "@/types/chat"
 import { useApi } from "@/composables/useApi"
 
 const createTimeLabel = () => {
@@ -24,7 +25,7 @@ const createTimeLabel = () => {
 const createId = () => crypto.randomUUID()
 
 export const useChatState = () => {
-  const { fetchChatThreads, fetchConversation } = useApi()
+  const { fetchChatThreads, fetchConversation, sendChatMessage } = useApi()
 
   // 상태 관리
   const threads = ref<ChatThread[]>([])
@@ -84,7 +85,7 @@ export const useChatState = () => {
     }
   }
 
-  const sendMessage = (content?: string, attachments?: File[]) => {
+  const sendMessage = async (content?: string, attachments?: File[]) => {
     // 이미 AI 응답을 기다리고 있으면 전송하지 않음
     if (isWaitingForResponse.value || isLoading.value) {
       return
@@ -96,36 +97,85 @@ export const useChatState = () => {
     }
 
     // 사용자 메시지 추가
-    messages.value = [
-      ...messages.value,
-      {
-        id: createId(),
-        role: "user",
-        content: messageContent,
-        time: createTimeLabel(),
-        attachments: attachments,
-      },
-    ]
+    const userMessage: ChatMessage = {
+      id: createId(),
+      role: "user",
+      content: messageContent,
+      time: createTimeLabel(),
+      attachments: attachments,
+    }
+    messages.value = [...messages.value, userMessage]
     messageInput.value = ""
 
     // AI 응답 대기 상태 시작
     isWaitingForResponse.value = true
+    error.value = null
 
-    // AI 응답 시뮬레이션 (테스트용)
-    setTimeout(() => {
-      messages.value = [
-        ...messages.value,
-        {
-          id: createId(),
-          role: "assistant",
-          content: "안녕하세요. 저는 AI, Kade 입니다. 현재는 테스트 기능을 수행중이며 정해진 내용을 답변합니다.",
-          time: createTimeLabel(),
+    // Assistant 응답 메시지 생성 (스트리밍으로 내용이 추가됨)
+    const assistantMessageId = createId()
+    const assistantMessage: ChatMessage = {
+      id: assistantMessageId,
+      role: "assistant",
+      content: "",
+      time: createTimeLabel(),
+    }
+    messages.value = [...messages.value, assistantMessage]
+
+    // 현재 활성화된 대화방의 sessionId 가져오기 (있을 경우)
+    const activeThread = threads.value.find(thread => thread.active)
+    const sessionId = activeThread?.conversationId
+
+    // AssistantRequest 생성
+    const request: AssistantRequest = {
+      promptType: PromptType.CONVERSATION,
+      question: messageContent,
+      sessionId: sessionId,
+      // 필요시 추가 필드 설정
+      // language: "ko",
+      // targetType: "...",
+      // toneType: "...",
+      // userId: "...",
+      // tenant: "...",
+    }
+
+    console.log("[채팅 메시지 전송]", {
+      request,
+      messageContent,
+      sessionId,
+    })
+
+    try {
+      // SSE 스트리밍 시작
+      await sendChatMessage(
+        request,
+        // onMessage: 스트림에서 데이터를 받을 때마다 호출
+        (data: string) => {
+          // 메시지 배열에서 해당 assistant 메시지를 찾아 내용 업데이트
+          const messageIndex = messages.value.findIndex(msg => msg.id === assistantMessageId)
+          if (messageIndex !== -1) {
+            // 기존 내용에 새 데이터 추가 (스트리밍)
+            messages.value[messageIndex] = {
+              ...messages.value[messageIndex],
+              content: messages.value[messageIndex].content + data,
+            }
+          }
         },
-      ]
-
-      // AI 응답 완료 후 대기 상태 해제
+        // onError: 에러 발생 시
+        (err: Error) => {
+          error.value = err.message
+          isWaitingForResponse.value = false
+          console.error("채팅 메시지 전송 실패:", err)
+        },
+        // onComplete: 스트림 완료 시
+        () => {
+          isWaitingForResponse.value = false
+        }
+      )
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : "채팅 메시지 전송에 실패했습니다."
       isWaitingForResponse.value = false
-    }, 1000) // 1초 후 응답
+      console.error("채팅 메시지 전송 오류:", err)
+    }
   }
 
   const startNewChat = () => {

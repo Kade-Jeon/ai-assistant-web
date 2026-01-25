@@ -1,4 +1,9 @@
-import type { ChatThread, ChatMessage } from "@/types/chat"
+import type { AssistantRequest, ChatThread, ChatMessage } from "@/types/chat"
+import { extractCompleteJsonFromBuffer } from "@/lib/chatCompletionParser"
+
+// API base URL - 환경 변수로 관리 가능
+// 개발 환경에서 Vite 프록시를 사용하는 경우 빈 문자열 사용
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "" : "http://localhost:8080")
 
 // 임시 mock 데이터 - 실제 백엔드 연동 시 교체 예정
 const mockThreads: ChatThread[] = [
@@ -144,8 +149,113 @@ export const useApi = () => {
     }
   }
 
+  /**
+   * SSE 스트리밍을 통해 채팅 메시지를 전송하고 응답을 받습니다.
+   * @param request 채팅 요청 데이터
+   * @param onMessage 스트림에서 메시지를 받을 때 호출되는 콜백
+   * @param onError 에러 발생 시 호출되는 콜백
+   * @param onComplete 스트림 완료 시 호출되는 콜백
+   */
+  const sendChatMessage = async (
+    request: AssistantRequest,
+    onMessage: (data: string) => void,
+    onError?: (error: Error) => void,
+    onComplete?: () => void
+  ): Promise<void> => {
+    const url = `${API_BASE_URL}/api/v1/ai/func`
+    const requestBody = JSON.stringify(request)
+    
+    console.log("[SSE 요청 시작]", {
+      url,
+      method: "POST",
+      body: request,
+      apiBaseUrl: API_BASE_URL,
+    })
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: requestBody,
+      })
+
+      console.log("[SSE 응답 받음]", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      if (!response.body) {
+        throw new Error("Response body is null")
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let connectedProcessed = false
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) {
+          // 마지막 버퍼에 남은 데이터 처리
+          if (buffer.trim()) {
+            const { contents } = extractCompleteJsonFromBuffer(buffer)
+            contents.forEach(content => {
+              if (content) {
+                onMessage(content)
+              }
+            })
+          }
+          onComplete?.()
+          break
+        }
+
+        // 청크를 텍스트로 디코딩
+        buffer += decoder.decode(value, { stream: true })
+
+        // "connected" 문자열 처리 (최초 1회만)
+        if (!connectedProcessed && buffer.toLowerCase().startsWith('connected')) {
+          buffer = buffer.substring('connected'.length)
+          connectedProcessed = true
+        }
+
+        // 완전한 JSON 객체들을 추출 및 파싱
+        const { contents, remainingBuffer } = extractCompleteJsonFromBuffer(buffer)
+        
+        // 파싱된 내용들을 onMessage로 전달
+        contents.forEach(content => {
+          if (content) {
+            onMessage(content)
+          }
+        })
+
+        // 버퍼 업데이트 (불완전한 JSON은 남김)
+        buffer = remainingBuffer
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error : new Error("알 수 없는 오류가 발생했습니다.")
+      console.error("[SSE 스트리밍 오류]", {
+        error: errorMessage,
+        message: errorMessage.message,
+        stack: errorMessage.stack,
+        url,
+      })
+      onError?.(errorMessage as Error)
+      throw errorMessage
+    }
+  }
+
   return {
     fetchChatThreads,
     fetchConversation,
+    sendChatMessage,
   }
 }
