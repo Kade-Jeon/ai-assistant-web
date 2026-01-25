@@ -155,30 +155,53 @@ export const useApi = () => {
    * @param onMessage 스트림에서 메시지를 받을 때 호출되는 콜백
    * @param onError 에러 발생 시 호출되는 콜백
    * @param onComplete 스트림 완료 시 호출되는 콜백
+   * @param file 첨부 파일 (있을 경우 multipart/form-data로 전송)
    */
   const sendChatMessage = async (
     request: AssistantRequest,
     onMessage: (data: string) => void,
     onError?: (error: Error) => void,
-    onComplete?: () => void
+    onComplete?: () => void,
+    file?: File
   ): Promise<void> => {
-    const url = `${API_BASE_URL}/api/v1/ai/func`
-    const requestBody = JSON.stringify(request)
+    const url = `${API_BASE_URL}/api/v1/ai/conv`
     
     console.log("[SSE 요청 시작]", {
       url,
       method: "POST",
       body: request,
+      hasFile: !!file,
+      fileName: file?.name,
       apiBaseUrl: API_BASE_URL,
     })
 
     try {
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
+      let requestBody: BodyInit
+      let headers: HeadersInit
+
+      if (file) {
+        // 파일이 있는 경우: multipart/form-data로 전송
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("request", JSON.stringify(request))
+        
+        requestBody = formData
+        // multipart/form-data의 경우 브라우저가 자동으로 Content-Type과 boundary를 설정하므로 명시하지 않음
+        headers = {
+          Accept: "text/event-stream",
+        }
+      } else {
+        // 파일이 없는 경우: application/json으로 전송
+        requestBody = JSON.stringify(request)
+        headers = {
           "Content-Type": "application/json",
           Accept: "text/event-stream",
-        },
+        }
+      }
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
         body: requestBody,
       })
 

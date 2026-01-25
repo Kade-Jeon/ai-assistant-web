@@ -74,8 +74,9 @@ export const useChatState = () => {
       threads.value = chatThreads
 
       // 첫 번째 대화방 자동 선택 (최근 대화)
-      if (chatThreads.length > 0) {
-        await selectThread(chatThreads[0].conversationId)
+      const firstThread = chatThreads[0]
+      if (firstThread?.conversationId) {
+        await selectThread(firstThread.conversationId)
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : '초기 데이터 로딩에 실패했습니다.'
@@ -145,6 +146,9 @@ export const useChatState = () => {
     })
 
     try {
+      // 첨부 파일이 있으면 첫 번째 파일만 전송 (백엔드가 단일 파일만 지원)
+      const fileToSend = attachments && attachments.length > 0 ? attachments[0] : undefined
+
       // SSE 스트리밍 시작
       await sendChatMessage(
         request,
@@ -153,10 +157,13 @@ export const useChatState = () => {
           // 메시지 배열에서 해당 assistant 메시지를 찾아 내용 업데이트
           const messageIndex = messages.value.findIndex(msg => msg.id === assistantMessageId)
           if (messageIndex !== -1) {
-            // 기존 내용에 새 데이터 추가 (스트리밍)
-            messages.value[messageIndex] = {
-              ...messages.value[messageIndex],
-              content: messages.value[messageIndex].content + data,
+            const currentMessage = messages.value[messageIndex]
+            if (currentMessage) {
+              // 기존 내용에 새 데이터 추가 (스트리밍)
+              messages.value[messageIndex] = {
+                ...currentMessage,
+                content: (currentMessage.content || "") + data,
+              }
             }
           }
         },
@@ -169,7 +176,9 @@ export const useChatState = () => {
         // onComplete: 스트림 완료 시
         () => {
           isWaitingForResponse.value = false
-        }
+        },
+        // file: 첨부 파일 전달
+        fileToSend
       )
     } catch (err) {
       error.value = err instanceof Error ? err.message : "채팅 메시지 전송에 실패했습니다."
@@ -180,8 +189,9 @@ export const useChatState = () => {
 
   const startNewChat = () => {
     // 모든 대화방 비활성화하고 첫 번째 대화방 선택
-    if (threads.value.length > 0) {
-      selectThread(threads.value[0].conversationId)
+    const firstThread = threads.value[0]
+    if (firstThread?.conversationId) {
+      selectThread(firstThread.conversationId)
     }
     messageInput.value = ""
     isWaitingForResponse.value = false // 대기 상태 초기화
@@ -200,7 +210,7 @@ export const useChatState = () => {
     isLoading,
     error,
     isWaitingForResponse,
-    sendMessage: sendMessage as (content?: string) => void,
+    sendMessage: sendMessage as (content?: string, attachments?: File[]) => void,
     startNewChat,
     selectThread,
   }
