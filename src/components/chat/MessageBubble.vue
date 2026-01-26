@@ -67,6 +67,11 @@ function preprocessMarkdown(text: string): string {
   return processedLines.join('\n')
 }
 
+// Assistant 메시지가 로딩 중인지 확인 (content가 비어있을 때)
+const isLoading = computed(() => {
+  return !isUserRole(props.message.role) && !props.message.content
+})
+
 // Assistant 메시지는 마크다운으로 렌더링, 사용자 메시지는 일반 텍스트
 const renderedContent = computed(() => {
   if (isUserRole(props.message.role)) {
@@ -102,7 +107,12 @@ const renderedContent = computed(() => {
         <!-- 사용자 메시지: 일반 텍스트 -->
         <p v-if="isUserRole(message.role)" class="whitespace-pre-line">{{ message.content }}</p>
         
-        <!-- Assistant 메시지: 마크다운 렌더링 -->
+        <!-- Assistant 메시지: 로딩 애니메이션 또는 마크다운 렌더링 -->
+        <div v-else-if="isLoading" class="flex items-center gap-1 py-1">
+          <span class="loading-dot" />
+          <span class="loading-dot" />
+          <span class="loading-dot" />
+        </div>
         <div
           v-else
           class="markdown-content"
@@ -265,5 +275,37 @@ const renderedContent = computed(() => {
 /* 다크 모드 스타일 */
 .dark .markdown-content :deep(blockquote) {
   border-color: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* 로딩 애니메이션 - 회색조로 부드러운 느낌 */
+.loading-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background-color: var(--muted-foreground);
+  animation: loading-bounce 1.4s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes loading-bounce {
+  0%, 80%, 100% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 </style>
