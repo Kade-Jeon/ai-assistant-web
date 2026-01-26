@@ -1,152 +1,172 @@
-import type { AssistantRequest, ChatThread, ChatMessage } from "@/types/chat"
+import type {
+  AssistantRequest,
+  ChatThread,
+  ChatMessage,
+  ChatRole,
+  UserConversationItemDto,
+  ConversationMessageDto,
+} from "@/types/chat"
 import { extractCompleteJsonFromBuffer } from "@/lib/chatCompletionParser"
 
 // API base URL - 환경 변수로 관리 가능
 // 개발 환경에서 Vite 프록시를 사용하는 경우 빈 문자열 사용
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? "" : "http://localhost:8080")
 
-// 임시 mock 데이터 - 실제 백엔드 연동 시 교체 예정
-const mockThreads: ChatThread[] = [
-  {
-    id: "t1",
-    title: "프로덕트 전략 정리",
-    active: true,
-    conversationId: "conv_001"
-  },
-  {
-    id: "t2",
-    title: "Vue 성능 최적화 아이디어",
-    active: false,
-    conversationId: "conv_002"
-  },
-  {
-    id: "t3",
-    title: "디자인 시스템 톤앤매너",
-    active: false,
-    conversationId: "conv_003"
-  },
-  {
-    id: "t4",
-    title: "온보딩 플로우 개선",
-    active: false,
-    conversationId: "conv_004"
-  },
-]
+/** 대화 목록/채팅 요청 시 사용하는 사용자 식별자 (환경변수 우선) */
+const USER_ID = import.meta.env.VITE_USER_ID ?? "kade@thekade.com"
 
-// 시간 생성 헬퍼 함수
-const createTimeString = (minutesAgo: number = 0) => {
-  const now = new Date()
-  const pastTime = new Date(now.getTime() - (minutesAgo * 60 * 1000))
+/** role 문자열을 ChatRole로 매핑 (system/tool은 assistant로 표시). 대소문자 무시(USER→user). */
+const toChatRole = (role: string): ChatRole =>
+  String(role).toLowerCase() === "user" ? "user" : "assistant"
 
-  // 날짜 부분 (2025.01.23)
-  const dateStr = pastTime.toLocaleDateString("ko-KR", {
+/**
+ * 서버 시각 → 브라우저 로케일·로컬 시간대로 표시.
+ * - 현재 백엔드는 "한국 시간 기준 시각"을 ISO 형식으로 보내고 끝에 Z만 붙여 보냄(실제 UTC 아님).
+ *   예: 26일 20:38 KST → "2026-01-26T20:38:33Z". Z를 제거하고 로컬로 파싱해 26일 오후 8:38로 표시.
+ * - epoch ms/초 숫자도 지원.
+ */
+function formatTimestamp(timestamp: string | number | null | undefined): string {
+  if (timestamp === null || timestamp === undefined || timestamp === "") return ""
+  const raw = String(timestamp).trim()
+  if (!raw) return ""
+
+  let date: Date
+  const asNum = Number(timestamp)
+  if (typeof timestamp === "number" || (/^-?\d+$/.test(raw) && !Number.isNaN(asNum))) {
+    const ms = asNum < 1e12 ? asNum * 1000 : asNum
+    date = new Date(ms)
+  } else {
+    const isoWithZ = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z$/i.test(raw)
+    if (isoWithZ) {
+      date = new Date(raw.slice(0, -1))
+    } else {
+      const isoNoTz = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/i.test(raw)
+      date = new Date(isoNoTz ? `${raw}Z` : raw)
+    }
+  }
+
+  if (Number.isNaN(date.getTime())) return ""
+  const locale = typeof navigator !== "undefined" ? navigator.language : undefined
+  const dateStr = date.toLocaleDateString(locale, {
     year: "numeric",
     month: "2-digit",
-    day: "2-digit"
-  }).replace(/\./g, '').replace(/ /g, '.')
-
-  // 시간 부분 (오전 11:14)
-  const timeStr = pastTime.toLocaleTimeString("ko-KR", {
+    day: "2-digit",
+  })
+  const timeStr = date.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   })
-
   return `${dateStr} ${timeStr}`
 }
 
-const mockConversations: Record<string, ChatMessage[]> = {
-  "conv_001": [
-    {
-      id: "m1",
-      role: "assistant",
-      content: "안녕하세요! 프로덕트 전략 정리에 대해 무엇을 도와드릴까요?",
-      time: createTimeString(5), // 5분 전
-    },
-    {
-      id: "m2",
-      role: "user",
-      content: "현재 우리 서비스의 주요 경쟁사 분석을 하고 싶어요.",
-      time: createTimeString(4), // 4분 전
-    },
-    {
-      id: "m3",
-      role: "assistant",
-      content: "좋은 접근입니다. 경쟁사 분석을 위해서는 다음과 같은 항목들을 고려해야 합니다:\n\n1. 시장 점유율\n2. 주요 기능 비교\n3. 가격 정책\n4. 사용자 피드백\n5. 기술 스택\n\n어떤 측면부터 시작해볼까요?",
-      time: createTimeString(2), // 2분 전
-    },
-  ],
-  "conv_002": [
-    {
-      id: "m4",
-      role: "assistant",
-      content: "Vue 성능 최적화에 대해 이야기 나눠보죠. 어떤 부분에서 병목 현상이 발생하고 있나요?",
-      time: createTimeString(15), // 15분 전
-    },
-    {
-      id: "m5",
-      role: "user",
-      content: "리스트 렌더링이 느린 것 같아요. 수백 개의 아이템을 표시해야 하는데...",
-      time: createTimeString(10), // 10분 전
-    },
-  ],
-  "conv_003": [
-    {
-      id: "m6",
-      role: "assistant",
-      content: "디자인 시스템의 톤앤매너를 정의하는 것은 정말 중요합니다. 현재 브랜드의 성격을 어떻게 정의하고 있나요?",
-      time: createTimeString(8), // 8분 전
-    },
-  ],
-  "conv_004": [
-    {
-      id: "m7",
-      role: "assistant",
-      content: "온보딩 플로우 개선은 사용자 경험에 큰 영향을 미칩니다. 현재 어떤 문제가 있나요?",
-      time: createTimeString(12), // 12분 전
-    },
-  ],
-}
-
-// 실제 API 호출처럼 약간의 지연을 주기 위한 헬퍼 함수
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
 export const useApi = () => {
   /**
-   * 채팅방 목록을 조회합니다.
-   * 실제 백엔드에서는 /api/chat/threads 엔드포인트로 호출될 예정입니다.
+   * 대화 목록을 조회합니다.
+   * GET /api/v1/ai/conv, USER-ID 헤더 필요.
+   * 응답을 ChatThread 형태(id, title, active, conversationId)로 변환해 반환합니다.
    */
   const fetchChatThreads = async (): Promise<ChatThread[]> => {
+    const url = `${API_BASE_URL}/api/v1/ai/conv`
     try {
-      // 실제 API 호출 시뮬레이션
-      await delay(500)
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "USER-ID": USER_ID,
+        },
+      })
 
-      // 임시 mock 데이터 반환
-      return [...mockThreads]
+      if (!response.ok) {
+        const message = response.status === 400
+          ? "USER-ID 헤더를 제공해주세요."
+          : `대화 목록 조회 실패 (${response.status})`
+        throw new Error(message)
+      }
+
+      const data = (await response.json()) as UserConversationItemDto[]
+      return (Array.isArray(data) ? data : []).map((item) => ({
+        id: item.conversationId,
+        title: item.subject,
+        active: false,
+        conversationId: item.conversationId,
+      }))
     } catch (error) {
-      console.error('채팅방 목록 조회 실패:', error)
-      throw new Error('채팅방 목록을 불러오는데 실패했습니다.')
+      if (error instanceof Error) throw error
+      console.error("채팅방 목록 조회 실패:", error)
+      throw new Error("채팅방 목록을 불러오는데 실패했습니다.")
     }
   }
 
   /**
-   * 특정 대화방의 메시지들을 조회합니다.
-   * 실제 백엔드에서는 /api/chat/conversations/{conversationId} 엔드포인트로 호출될 예정입니다.
+   * 특정 대화방의 메시지 목록을 조회합니다.
+   * GET /api/v1/ai/conv/{conversationId}, USER-ID 헤더 필요.
+   * limit 쿼리는 사용하지 않습니다.
    */
   const fetchConversation = async (conversationId: string): Promise<ChatMessage[]> => {
+    const url = `${API_BASE_URL}/api/v1/ai/conv/${encodeURIComponent(conversationId)}`
     try {
-      // 실제 API 호출 시뮬레이션
-      await delay(300)
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "USER-ID": USER_ID,
+        },
+      })
 
-      const messages = mockConversations[conversationId]
-      if (!messages) {
-        throw new Error(`대화방 ${conversationId}을 찾을 수 없습니다.`)
+      if (!response.ok) {
+        const message = response.status === 400
+          ? "USER-ID 헤더를 제공해주세요."
+          : `대화 내용 조회 실패 (${response.status})`
+        throw new Error(message)
       }
 
-      return [...messages]
+      const data = (await response.json()) as ConversationMessageDto[]
+      const list = Array.isArray(data) ? data : []
+      return list.map((msg, i) => ({
+        id: `msg-${conversationId}-${i}`,
+        role: toChatRole(msg.role),
+        content: msg.content ?? "",
+        time: formatTimestamp(msg.timestamp),
+      }))
     } catch (error) {
+      if (error instanceof Error) throw error
       console.error(`대화 내용 조회 실패 (${conversationId}):`, error)
-      throw new Error('대화 내용을 불러오는데 실패했습니다.')
+      throw new Error("대화 내용을 불러오는데 실패했습니다.")
     }
+  }
+
+  /**
+   * SSE 스트림 버퍼에서 conversation_created 이벤트를 찾아 파싱합니다.
+   * 형식: event: conversation_created\ndata: {"conversationId":"...","subject":"..."}
+   */
+  const consumeConversationCreatedEvent = (
+    buffer: string
+  ): { item: UserConversationItemDto | null; remainingBuffer: string } => {
+    const segments = buffer.split(/\n\n/)
+    const last = segments.pop() ?? "";
+    let item: UserConversationItemDto | null = null
+    const kept: string[] = []
+
+    for (const seg of segments) {
+      const match = seg.match(/event:\s*conversation_created\s*\ndata:\s*([\s\S]*)/i)
+      const dataPart = match?.[1]
+      if (dataPart !== undefined) {
+        try {
+          const raw = dataPart.trim()
+          const parsed = JSON.parse(raw) as UserConversationItemDto
+          if (typeof parsed?.conversationId === "string" && typeof parsed?.subject === "string") {
+            item = parsed
+          } else {
+            kept.push(seg)
+          }
+        } catch {
+          kept.push(seg)
+        }
+      } else {
+        kept.push(seg)
+      }
+    }
+
+    const remainingBuffer = kept.length ? kept.join("\n\n") + "\n\n" + last : last
+    return { item, remainingBuffer }
   }
 
   /**
@@ -155,6 +175,7 @@ export const useApi = () => {
    * @param onMessage 스트림에서 메시지를 받을 때 호출되는 콜백
    * @param onError 에러 발생 시 호출되는 콜백
    * @param onComplete 스트림 완료 시 호출되는 콜백
+   * @param onConversationCreated conversation_created SSE 이벤트 수신 시 호출 (선택)
    * @param file 첨부 파일 (있을 경우 multipart/form-data로 전송)
    */
   const sendChatMessage = async (
@@ -162,6 +183,7 @@ export const useApi = () => {
     onMessage: (data: string) => void,
     onError?: (error: Error) => void,
     onComplete?: () => void,
+    onConversationCreated?: (item: UserConversationItemDto) => void,
     file?: File
   ): Promise<void> => {
     const url = `${API_BASE_URL}/api/v1/ai/conv`
@@ -179,6 +201,11 @@ export const useApi = () => {
       let requestBody: BodyInit
       let headers: HeadersInit
 
+      const commonHeaders: HeadersInit = {
+        Accept: "text/event-stream",
+        "user-id": "kade@thekade.com",
+      }
+
       if (file) {
         // 파일이 있는 경우: multipart/form-data로 전송
         const formData = new FormData()
@@ -187,15 +214,13 @@ export const useApi = () => {
         
         requestBody = formData
         // multipart/form-data의 경우 브라우저가 자동으로 Content-Type과 boundary를 설정하므로 명시하지 않음
-        headers = {
-          Accept: "text/event-stream",
-        }
+        headers = commonHeaders
       } else {
         // 파일이 없는 경우: application/json으로 전송
         requestBody = JSON.stringify(request)
         headers = {
+          ...commonHeaders,
           "Content-Type": "application/json",
-          Accept: "text/event-stream",
         }
       }
 
@@ -228,7 +253,16 @@ export const useApi = () => {
         const { done, value } = await reader.read()
 
         if (done) {
-          // 마지막 버퍼에 남은 데이터 처리
+          // 마지막 버퍼에서 conversation_created 처리
+          if (onConversationCreated) {
+            let parsed = consumeConversationCreatedEvent(buffer)
+            while (parsed.item) {
+              onConversationCreated(parsed.item)
+              parsed = consumeConversationCreatedEvent(parsed.remainingBuffer)
+            }
+            buffer = parsed.remainingBuffer
+          }
+          // 마지막 버퍼에 남은 콘텐츠 처리
           if (buffer.trim()) {
             const { contents } = extractCompleteJsonFromBuffer(buffer)
             contents.forEach(content => {
@@ -243,6 +277,16 @@ export const useApi = () => {
 
         // 청크를 텍스트로 디코딩
         buffer += decoder.decode(value, { stream: true })
+
+        // SSE "event: conversation_created" + "data: {...}" 파싱 (대화방 생성 시 서버 전송)
+        if (onConversationCreated) {
+          let parsed = consumeConversationCreatedEvent(buffer)
+          while (parsed.item) {
+            onConversationCreated(parsed.item)
+            parsed = consumeConversationCreatedEvent(parsed.remainingBuffer)
+          }
+          buffer = parsed.remainingBuffer
+        }
 
         // "connected" 문자열 처리 (최초 1회만)
         if (!connectedProcessed && buffer.toLowerCase().startsWith('connected')) {

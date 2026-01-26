@@ -122,27 +122,20 @@ export const useChatState = () => {
     }
     messages.value = [...messages.value, assistantMessage]
 
-    // 현재 활성화된 대화방의 sessionId 가져오기 (있을 경우)
-    const activeThread = threads.value.find(thread => thread.active)
-    const sessionId = activeThread?.conversationId
+    // 기존 대화방이면 conversationId 포함, 새 대화면 없음
+    const activeThread = threads.value.find((thread) => thread.active)
+    const conversationId = activeThread?.conversationId
 
-    // AssistantRequest 생성
     const request: AssistantRequest = {
       promptType: PromptType.CONVERSATION,
       question: messageContent,
-      sessionId: sessionId,
-      // 필요시 추가 필드 설정
-      // language: "ko",
-      // targetType: "...",
-      // toneType: "...",
-      // userId: "...",
-      // tenant: "...",
+      ...(conversationId && { conversationId }),
     }
 
     console.log("[채팅 메시지 전송]", {
       request,
       messageContent,
-      sessionId,
+      conversationId: conversationId ?? "(새 대화)",
     })
 
     try {
@@ -177,6 +170,19 @@ export const useChatState = () => {
         () => {
           isWaitingForResponse.value = false
         },
+        // onConversationCreated: 서버가 conversation_created SSE로 대화방(제목) 보내면 최근 대화 맨 위에 추가
+        (item) => {
+          const newThread: ChatThread = {
+            id: item.conversationId,
+            title: item.subject,
+            active: true,
+            conversationId: item.conversationId,
+          }
+          const others = threads.value
+            .map((t) => ({ ...t, active: false }))
+            .filter((t) => t.conversationId !== item.conversationId)
+          threads.value = [newThread, ...others]
+        },
         // file: 첨부 파일 전달
         fileToSend
       )
@@ -188,13 +194,11 @@ export const useChatState = () => {
   }
 
   const startNewChat = () => {
-    // 모든 대화방 비활성화하고 첫 번째 대화방 선택
-    const firstThread = threads.value[0]
-    if (firstThread?.conversationId) {
-      selectThread(firstThread.conversationId)
-    }
+    // 새 대화 시작: 모든 스레드 비활성화, 메시지·입력 초기화 (첫 메시지 전송 시 서버가 conversation_created로 목록에 추가)
+    threads.value = threads.value.map((t) => ({ ...t, active: false }))
+    messages.value = []
     messageInput.value = ""
-    isWaitingForResponse.value = false // 대기 상태 초기화
+    isWaitingForResponse.value = false
   }
 
   // 초기 데이터 로딩
