@@ -126,6 +126,15 @@ export const useChatState = () => {
     const activeThread = threads.value.find((thread) => thread.active)
     const conversationId = activeThread?.conversationId
 
+    // 기존 대화방에서 채팅 보냈을 때: 해당 방을 최근 대화 맨 위로 올림
+    if (conversationId) {
+      const current = threads.value.find((t) => t.conversationId === conversationId)
+      if (current) {
+        const rest = threads.value.filter((t) => t.conversationId !== conversationId)
+        threads.value = [{ ...current, active: true }, ...rest.map((t) => ({ ...t, active: false }))]
+      }
+    }
+
     const request: AssistantRequest = {
       promptType: PromptType.CONVERSATION,
       question: messageContent,
