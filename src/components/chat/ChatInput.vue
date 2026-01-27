@@ -1,67 +1,77 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import FileSelector from "./FileSelector.vue"
-import SelectedFilesList from "./SelectedFilesList.vue"
+import { computed, ref } from "vue";
+import { Send } from "lucide-vue-next";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import FileSelector from "./FileSelector.vue";
+import SelectedFilesList from "./SelectedFilesList.vue";
 
 const props = defineProps<{
-  modelValue: string
-  canSend?: boolean
-}>()
+  modelValue: string;
+  canSend?: boolean;
+}>();
 
 const emits = defineEmits<{
-  (e: "update:modelValue", value: string): void
-  (e: "send", value: string, attachments?: File[]): void
-}>()
+  (e: "update:modelValue", value: string): void;
+  (e: "send", value: string, attachments?: File[]): void;
+}>();
 
-const isDisabled = computed(() => props.canSend === false)
-const isComposing = ref(false)
-const selectedFiles = ref<File[]>([])
-const fileInput = ref<HTMLInputElement>()
+const isDisabled = computed(() => props.canSend === false);
+const isComposing = ref(false);
+const selectedFiles = ref<File[]>([]);
+const fileInput = ref<HTMLInputElement>();
 
 const handleInput = (value: string | number) => {
-  emits("update:modelValue", String(value))
-}
+  emits("update:modelValue", String(value));
+};
 
 const handleKeydown = (event: KeyboardEvent) => {
-  if (event.key === 'Enter' && !isComposing.value) {
-    event.preventDefault()
-    handleSend()
+  if (event.key === "Enter" && !isComposing.value) {
+    event.preventDefault();
+    handleSend();
   }
-}
+};
 
 const handleSend = () => {
-  emits("send", props.modelValue, selectedFiles.value.length > 0 ? [...selectedFiles.value] : undefined)
-  selectedFiles.value = []
-}
+  emits(
+    "send",
+    props.modelValue,
+    selectedFiles.value.length > 0 ? [...selectedFiles.value] : undefined,
+  );
+  selectedFiles.value = [];
+};
 
 const handleFileSelect = () => {
-  fileInput.value?.click()
-}
+  fileInput.value?.click();
+};
 
 const handleFileChange = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const files = target.files
+  const target = event.target as HTMLInputElement;
+  const files = target.files;
   if (files) {
-    selectedFiles.value = [...selectedFiles.value, ...Array.from(files)]
+    selectedFiles.value = [...selectedFiles.value, ...Array.from(files)];
   }
   // Reset input value to allow selecting the same file again
-  target.value = ''
-}
+  target.value = "";
+};
 
 const removeFile = (index: number) => {
-  selectedFiles.value.splice(index, 1)
-}
+  selectedFiles.value.splice(index, 1);
+};
 </script>
 
 <template>
   <div class="bg-background border-t flex-shrink-0">
     <div class="w-full max-w-3xl mx-auto px-4 py-4">
       <!-- 선택된 파일 목록 -->
-      <SelectedFilesList :selected-files="selectedFiles" @remove-file="removeFile" />
+      <SelectedFilesList
+        :selected-files="selectedFiles"
+        @remove-file="removeFile"
+      />
 
-      <div class="flex items-center gap-2 p-2 border bg-card rounded-xl shadow-sm">
+      <div
+        class="flex items-center gap-2 p-2 border bg-card rounded-xl shadow-sm"
+      >
         <!-- 첨부파일 버튼 -->
         <FileSelector @file-select="handleFileSelect" />
 
@@ -75,8 +85,14 @@ const removeFile = (index: number) => {
           @compositionend="isComposing = false"
         />
 
-        <Button size="sm" class="h-9" :disabled="isDisabled" @click="handleSend">
-          전송
+        <Button
+          size="sm"
+          class="h-9 border border-border bg-white text-black hover:bg-slate-200 disabled:border-neutral-300 disabled:bg-neutral-200 dark:bg-input/30 dark:border-input dark:text-foreground dark:hover:bg-slate-700 dark:disabled:border-neutral-600 dark:disabled:bg-neutral-700"
+          :disabled="isDisabled"
+          aria-label="전송"
+          @click="handleSend"
+        >
+          <Send class="h-4 w-4" />
         </Button>
       </div>
 

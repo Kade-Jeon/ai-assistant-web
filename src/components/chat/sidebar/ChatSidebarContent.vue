@@ -12,11 +12,18 @@ defineProps<{
 defineEmits<{
   (e: "dashboard"): void
   (e: "select-thread"): [conversationId: string]
+  (e: "rename"): [conversationId: string]
+  (e: "delete"): [conversationId: string]
 }>()
 </script>
 
 <template>
   <ChatSidebarSearch />
   <ChatSidebarMenu :currentView="currentView" @dashboard="$emit('dashboard')" />
-  <ChatSidebarHistory :threads="threads" @select-thread="$emit('select-thread', $event)" />
+  <ChatSidebarHistory
+    :threads="threads"
+    @select-thread="$emit('select-thread', $event)"
+    @rename="$emit('rename', $event)"
+    @delete="$emit('delete', $event)"
+  />
 </template>

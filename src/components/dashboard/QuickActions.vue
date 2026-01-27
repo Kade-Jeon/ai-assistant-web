@@ -41,7 +41,7 @@ const quickActions: QuickAction[] = [
         <button
           v-for="action in quickActions"
           :key="action.title"
-          class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
         >
           <div class="font-medium text-gray-900 dark:text-white">{{ action.title }}</div>
           <div class="text-sm text-gray-600 dark:text-gray-400">{{ action.description }}</div>

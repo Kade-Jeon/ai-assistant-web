@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { computed } from "vue"
-import MarkdownIt from "markdown-it"
-import { Bot as BotIcon, User as UserIcon } from "lucide-vue-next"
-import type { ChatMessage, ChatRole } from "@/types/chat"
-import AttachmentList from "./AttachmentList.vue"
+import { computed } from "vue";
+import MarkdownIt from "markdown-it";
+import { Bot as BotIcon, RotateCw, User as UserIcon } from "lucide-vue-next";
+import type { ChatMessage, ChatRole } from "@/types/chat";
+import AttachmentList from "./AttachmentList.vue";
 
 const props = defineProps<{
-  message: ChatMessage
-}>()
+  message: ChatMessage;
+}>();
 
-const isUserRole = (role: ChatRole) => role === "user"
-const getRoleLabel = (role: ChatRole) => (isUserRole(role) ? "나" : "KadeAI")
+const emit = defineEmits<{
+  retry: [message: ChatMessage];
+}>();
+
+const isUserRole = (role: ChatRole) => role === "user";
+const isFailed = computed(
+  () => isUserRole(props.message.role) && props.message.status === "failed",
+);
+const getRoleLabel = (role: ChatRole) => (isUserRole(role) ? "나" : "KadeAI");
 
 // markdown-it 인스턴스 생성 (한 번만 생성)
 // html: false로 설정하여 XSS 공격 방지 (보안)
@@ -19,84 +26,92 @@ const md = new MarkdownIt({
   breaks: false, // breaks를 false로 설정하여 리스트 파싱 개선
   linkify: true, // URL을 자동으로 링크로 변환
   typographer: true, // 일부 typography 개선 (따옴표 등)
-})
+});
 
 /**
  * 마크다운 렌더링 전 텍스트 전처리
  * 리스트 항목 앞에 빈 줄을 추가하여 마크다운-it이 제대로 인식하도록 함
  */
 function preprocessMarkdown(text: string): string {
-  if (!text) return ""
-  
+  if (!text) return "";
+
   // 먼저 리스트 항목 패턴을 찾아서 줄바꿈 추가 (한 줄로 연결된 경우 대비)
   // 예: "1. 항목1 2. 항목2" -> "1. 항목1\n2. 항목2"
-  let processed = text
-  
+  let processed = text;
+
   // 숫자 리스트 항목 패턴: "숫자. " (예: "1. ", "2. ", "10. ")
   // 이전에 리스트 항목이 아닌 문자 뒤에 오는 경우 줄바꿈 추가
-  processed = processed.replace(/([^\n])(\d+\.\s+)/g, '$1\n$2')
-  
+  processed = processed.replace(/([^\n])(\d+\.\s+)/g, "$1\n$2");
+
   // 불릿 리스트 항목 패턴: "- ", "* ", "+ " (단, 이미 줄 시작에 있는 경우 제외)
-  processed = processed.replace(/([^\n])([-*+]\s+)/g, '$1\n$2')
-  
+  processed = processed.replace(/([^\n])([-*+]\s+)/g, "$1\n$2");
+
   // 줄 단위로 분리하여 처리
-  const lines = processed.split('\n')
-  const processedLines: string[] = []
-  
+  const lines = processed.split("\n");
+  const processedLines: string[] = [];
+
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    if (line === undefined) continue
-    
-    const prevLine: string = i > 0 ? (lines[i - 1] ?? '') : ''
-    const trimmedLine = line.trim()
-    
+    const line = lines[i];
+    if (line === undefined) continue;
+
+    const prevLine: string = i > 0 ? (lines[i - 1] ?? "") : "";
+    const trimmedLine = line.trim();
+
     // 리스트 항목 패턴: 숫자. 또는 -, *, + 로 시작하는 줄
     // 예: "1. ", "2. ", "- ", "* ", "+ "
-    const isListItem = /^(\d+\.\s+|[-*+]\s+)/.test(trimmedLine)
-    const prevIsListItem = i > 0 && prevLine ? /^(\d+\.\s+|[-*+]\s+)/.test(prevLine.trim()) : false
-    const prevIsEmpty = prevLine ? prevLine.trim() === '' : true
-    
+    const isListItem = /^(\d+\.\s+|[-*+]\s+)/.test(trimmedLine);
+    const prevIsListItem =
+      i > 0 && prevLine ? /^(\d+\.\s+|[-*+]\s+)/.test(prevLine.trim()) : false;
+    const prevIsEmpty = prevLine ? prevLine.trim() === "" : true;
+
     // 리스트 항목이 이전 줄이 비어있지 않고 리스트가 아닌 경우, 빈 줄 추가
     if (isListItem && !prevIsEmpty && !prevIsListItem && i > 0) {
-      processedLines.push('')
+      processedLines.push("");
     }
-    
-    processedLines.push(line)
+
+    processedLines.push(line);
   }
-  
-  return processedLines.join('\n')
+
+  return processedLines.join("\n");
 }
 
 // Assistant 메시지가 로딩 중인지 확인 (content가 비어있을 때)
 const isLoading = computed(() => {
-  return !isUserRole(props.message.role) && !props.message.content
-})
+  return !isUserRole(props.message.role) && !props.message.content;
+});
 
 // Assistant 메시지는 마크다운으로 렌더링, 사용자 메시지는 일반 텍스트
 const renderedContent = computed(() => {
   if (isUserRole(props.message.role)) {
-    return props.message.content
+    return props.message.content;
   }
-  
+
   // Assistant 메시지: 마크다운 렌더링
   try {
-    const content = props.message.content || ""
+    const content = props.message.content || "";
     // 마크다운 전처리 후 렌더링
-    const preprocessedContent = preprocessMarkdown(content)
-    return md.render(preprocessedContent)
+    const preprocessedContent = preprocessMarkdown(content);
+    return md.render(preprocessedContent);
   } catch (error) {
-    console.error("마크다운 파싱 오류:", error)
-    return props.message.content
+    console.error("마크다운 파싱 오류:", error);
+    return props.message.content;
   }
-})
+});
 </script>
 
 <template>
   <div class="flex flex-col gap-2 px-4">
-    <div class="flex" :class="isUserRole(message.role) ? 'justify-end' : 'justify-start'">
+    <div
+      class="flex"
+      :class="isUserRole(message.role) ? 'justify-end' : 'justify-start'"
+    >
       <div
         class="max-w-xl px-4 py-3 text-sm leading-6 rounded-2xl shadow-sm"
-        :class="isUserRole(message.role) ? 'bg-foreground text-background' : 'bg-muted text-foreground'"
+        :class="[
+          isUserRole(message.role)
+            ? 'bg-neutral-400 text-background'
+            : 'bg-muted text-foreground',
+        ]"
       >
         <!-- 첨부파일 표시 -->
         <AttachmentList
@@ -105,29 +120,42 @@ const renderedContent = computed(() => {
         />
 
         <!-- 사용자 메시지: 일반 텍스트 -->
-        <p v-if="isUserRole(message.role)" class="whitespace-pre-line">{{ message.content }}</p>
-        
+        <p v-if="isUserRole(message.role)" class="whitespace-pre-line">
+          {{ message.content }}
+        </p>
+
         <!-- Assistant 메시지: 로딩 애니메이션 또는 마크다운 렌더링 -->
         <div v-else-if="isLoading" class="flex items-center gap-1 py-1">
           <span class="loading-dot" />
           <span class="loading-dot" />
           <span class="loading-dot" />
         </div>
-        <div
-          v-else
-          class="markdown-content"
-          v-html="renderedContent"
-        />
+        <div v-else class="markdown-content" v-html="renderedContent" />
       </div>
     </div>
     <div
-      class="flex items-center gap-2 text-xs text-muted-foreground"
+      class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
       :class="isUserRole(message.role) ? 'justify-end' : 'justify-start'"
     >
-      <component :is="isUserRole(message.role) ? UserIcon : BotIcon" class="h-3.5 w-3.5" />
+      <component
+        :is="isUserRole(message.role) ? UserIcon : BotIcon"
+        class="h-3.5 w-3.5 shrink-0"
+      />
       <span>{{ getRoleLabel(message.role) }}</span>
       <span>•</span>
       <span>{{ message.time }}</span>
+      <template v-if="isFailed">
+        <span>·</span>
+        <span class="text-red-500">전송 실패</span>
+        <button
+          type="button"
+          class="rounded p-0.5 text-red-500 hover:bg-slate-200"
+          aria-label="다시 시도"
+          @click="emit('retry', message)"
+        >
+          <RotateCw class="h-3.5 w-3.5" />
+        </button>
+      </template>
     </div>
   </div>
 </template>
@@ -211,7 +239,9 @@ const renderedContent = computed(() => {
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-family:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
 }
 
 .markdown-content :deep(pre) {
@@ -299,7 +329,9 @@ const renderedContent = computed(() => {
 }
 
 @keyframes loading-bounce {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     transform: scale(0.8);
     opacity: 0.5;
   }

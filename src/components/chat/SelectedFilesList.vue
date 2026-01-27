@@ -19,7 +19,7 @@ const { getFileIcon, getFileColor, formatFileSize } = useFileIcons()
       <div
         v-for="(file, index) in selectedFiles"
         :key="index"
-        class="inline-flex items-center gap-2 px-3 py-1 bg-muted/80 border border-border/30 rounded-full text-sm hover:bg-muted transition-colors"
+        class="inline-flex items-center gap-2 px-3 py-1 bg-muted/80 border border-border/30 rounded-full text-sm hover:bg-slate-200 transition-colors"
       >
         <component
           :is="getFileIcon(file.name)"
@@ -31,7 +31,7 @@ const { getFileIcon, getFileColor, formatFileSize } = useFileIcons()
         </span>
         <button
           @click="$emit('removeFile', index)"
-          class="text-muted-foreground hover:text-foreground ml-1 rounded-full hover:bg-muted/50 p-0.5 transition-colors"
+          class="text-muted-foreground hover:text-foreground ml-1 rounded-full hover:bg-slate-200 p-0.5 transition-colors"
           type="button"
           title="파일 제거"
         >

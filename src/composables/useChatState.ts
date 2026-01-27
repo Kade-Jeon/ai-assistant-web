@@ -25,7 +25,7 @@ const createTimeLabel = () => {
 const createId = () => crypto.randomUUID()
 
 export const useChatState = () => {
-  const { fetchChatThreads, fetchConversation, sendChatMessage } = useApi()
+  const { fetchChatThreads, fetchConversation, sendChatMessage, deleteConversation, patchConversationSubject } = useApi()
 
   // 상태 관리
   const threads = ref<ChatThread[]>([])
@@ -169,8 +169,11 @@ export const useChatState = () => {
             }
           }
         },
-        // onError: 에러 발생 시
+        // onError: 에러 발생 시 — AI 응답 버블 제거, 사용자 메시지를 전송 실패로 표시
         (err: Error) => {
+          messages.value = messages.value
+            .filter((m) => m.id !== assistantMessageId)
+            .map((m) => (m.id === userMessage.id ? { ...m, status: "failed" as const } : m))
           error.value = err.message
           isWaitingForResponse.value = false
           console.error("채팅 메시지 전송 실패:", err)
@@ -196,10 +199,20 @@ export const useChatState = () => {
         fileToSend
       )
     } catch (err) {
+      messages.value = messages.value
+        .filter((m) => m.id !== assistantMessageId)
+        .map((m) => (m.id === userMessage.id ? { ...m, status: "failed" as const } : m))
       error.value = err instanceof Error ? err.message : "채팅 메시지 전송에 실패했습니다."
       isWaitingForResponse.value = false
       console.error("채팅 메시지 전송 오류:", err)
     }
+  }
+
+  /** 전송 실패한 사용자 메시지 다시 보내기 */
+  const retryMessage = (msg: ChatMessage) => {
+    if (msg.role !== "user" || msg.status !== "failed") return
+    messages.value = messages.value.filter((m) => m.id !== msg.id)
+    sendMessage(msg.content, msg.attachments ?? [])
   }
 
   const startNewChat = () => {
@@ -208,6 +221,31 @@ export const useChatState = () => {
     messages.value = []
     messageInput.value = ""
     isWaitingForResponse.value = false
+  }
+
+  const deleteThread = async (conversationId: string) => {
+    try {
+      await deleteConversation(conversationId)
+      const wasActive = threads.value.some((t) => t.conversationId === conversationId && t.active)
+      threads.value = threads.value.filter((t) => t.conversationId !== conversationId)
+      if (wasActive) {
+        messages.value = []
+        const first = threads.value[0]
+        if (first) await selectThread(first.conversationId)
+        else startNewChat()
+      }
+    } catch {
+      // 토스트는 deleteConversation 내부에서 이미 표시함, 로컬 상태는 변경하지 않음
+    }
+  }
+
+  const renameThread = async (conversationId: string, newTitle: string) => {
+    const trimmed = newTitle.trim()
+    if (!trimmed) return
+    await patchConversationSubject(conversationId, trimmed)
+    threads.value = threads.value.map((t) =>
+      t.conversationId === conversationId ? { ...t, title: trimmed } : t,
+    )
   }
 
   // 초기 데이터 로딩
@@ -224,7 +262,10 @@ export const useChatState = () => {
     error,
     isWaitingForResponse,
     sendMessage: sendMessage as (content?: string, attachments?: File[]) => void,
+    retryMessage,
     startNewChat,
     selectThread,
+    deleteThread,
+    renameThread,
   }
 }

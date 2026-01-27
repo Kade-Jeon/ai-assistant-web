@@ -1,35 +1,45 @@
 <script setup lang="ts">
-import { nextTick, watch, ref } from "vue"
-import { Skeleton } from "@/components/ui/skeleton"
-import type { ChatMessage } from "@/types/chat"
-import MessageBubble from "./MessageBubble.vue"
+import { nextTick, watch, ref } from "vue";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { ChatMessage } from "@/types/chat";
+import MessageBubble from "./MessageBubble.vue";
 
 const props = defineProps<{
-  messages: ChatMessage[]
-  isSidebarOpen: boolean
-  isLoading?: boolean
+  messages: ChatMessage[];
+  isSidebarOpen: boolean;
+  isLoading?: boolean;
 }>()
 
+const emit = defineEmits<{
+  retry: [message: ChatMessage];
+}>();
+
 // 자동 스크롤을 위한 ref
-const messageContainer = ref<HTMLDivElement>()
+const messageContainer = ref<HTMLDivElement>();
 
 // 메시지가 변경될 때마다 스크롤을 맨 아래로 이동
-watch(() => props.messages, async () => {
-  await nextTick()
-  if (messageContainer.value) {
-    messageContainer.value.scrollTop = messageContainer.value.scrollHeight
-  }
-}, { deep: true })
+watch(
+  () => props.messages,
+  async () => {
+    await nextTick();
+    if (messageContainer.value) {
+      messageContainer.value.scrollTop = messageContainer.value.scrollHeight;
+    }
+  },
+  { deep: true },
+);
 </script>
 
 <template>
   <div ref="messageContainer" class="flex-1 overflow-y-auto">
-    <div :class="[
-      'flex flex-col w-full gap-6 mx-auto',
-      props.isSidebarOpen
-        ? 'transition-all duration-150 ease-out max-w-2xl pt-6 pb-8'
-        : 'transition-all duration-250 ease-out delay-75 max-w-3xl pt-6 pb-8'
-    ]">
+    <div
+      :class="[
+        'flex min-h-full flex-col w-full gap-6 mx-auto',
+        props.isSidebarOpen
+          ? 'transition-all duration-150 ease-out max-w-2xl pt-6 pb-8'
+          : 'transition-all duration-250 ease-out delay-75 max-w-3xl pt-6 pb-8',
+      ]"
+    >
       <!-- 로딩 중일 때 스켈레톤 표시 -->
       <div v-if="props.isLoading" class="space-y-4">
         <div v-for="i in 3" :key="i" class="flex flex-col gap-2">
@@ -42,9 +52,14 @@ watch(() => props.messages, async () => {
         </div>
       </div>
 
-      <!-- 메시지가 없을 때 -->
-      <div v-else-if="props.messages.length === 0" class="py-16 text-sm text-center text-muted-foreground">
-        아직 대화가 없어요. 메시지를 입력해 시작하세요.
+      <!-- 메시지가 없을 때: 화면 정가운데 h1 스타일 -->
+      <div
+        v-else-if="props.messages.length === 0"
+        class="flex flex-1 min-h-0 items-center justify-center"
+      >
+        <h2 class="text-2xl font-medium text-muted-foreground">
+          무엇을 도와드릴까요?
+        </h2>
       </div>
 
       <!-- 실제 메시지들 -->
@@ -54,6 +69,7 @@ watch(() => props.messages, async () => {
             v-for="message in props.messages"
             :key="message.id"
             :message="message"
+            @retry="emit('retry', $event)"
           />
         </transition-group>
       </div>
@@ -88,7 +104,8 @@ watch(() => props.messages, async () => {
 }
 
 @keyframes pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
   }
   50% {

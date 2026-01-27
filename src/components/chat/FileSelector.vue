@@ -12,7 +12,7 @@ defineEmits<{
   <Button
     size="sm"
     variant="outline"
-    class="h-9 px-3"
+    class="h-9 px-3 hover:bg-slate-200"
     @click="$emit('fileSelect')"
     type="button"
     title="첨부파일 추가 (DOC, DOCX, HWP, HWXP, PDF, PPT, PPTX, XLSX, XLS, TXT)"

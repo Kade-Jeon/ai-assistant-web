@@ -32,10 +32,15 @@ export interface ChatThread {
   conversationId: string
 }
 
+/** 사용자 메시지 전송 상태 (assistant 메시지에는 사용 안 함) */
+export type MessageSendStatus = "sending" | "sent" | "failed"
+
 export interface ChatMessage {
   id: string
   role: ChatRole
   content: string
   time: string
   attachments?: File[]
+  /** 사용자 메시지 한정: 전송 중/완료/실패. 없으면 과거 로드 메시지 등 */
+  status?: MessageSendStatus
 }

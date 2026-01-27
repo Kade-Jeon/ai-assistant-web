@@ -14,6 +14,8 @@ defineEmits<{
   (e: "new-chat"): void
   (e: "dashboard"): void
   (e: "select-thread"): [conversationId: string]
+  (e: "rename"): [conversationId: string]
+  (e: "delete"): [conversationId: string]
 }>()
 </script>
 
@@ -28,7 +30,14 @@ defineEmits<{
   >
     <div v-if="isOpen" class="w-64 bg-sidebar border-r flex flex-col h-full">
       <ChatSidebarHeader @new-chat="$emit('new-chat')" />
-      <ChatSidebarContent :threads="threads" :currentView="currentView" @dashboard="$emit('dashboard')" @select-thread="$emit('select-thread', $event)" />
+      <ChatSidebarContent
+        :threads="threads"
+        :currentView="currentView"
+        @dashboard="$emit('dashboard')"
+        @select-thread="$emit('select-thread', $event)"
+        @rename="$emit('rename', $event)"
+        @delete="$emit('delete', $event)"
+      />
       <ChatSidebarFooter />
     </div>
   </transition>
