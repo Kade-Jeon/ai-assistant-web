@@ -1,4 +1,4 @@
-import { computed, onMounted, ref } from "vue"
+import { computed, nextTick, onMounted, ref } from "vue"
 import type { AssistantRequest, ChatMessage, ChatThread } from "@/types/chat"
 import { PromptType } from "@/types/chat"
 import { useApi } from "@/composables/useApi"
@@ -119,6 +119,7 @@ export const useChatState = () => {
       role: "assistant",
       content: "",
       time: createTimeLabel(),
+      isStreaming: true,
     }
     messages.value = [...messages.value, assistantMessage]
 
@@ -161,11 +162,14 @@ export const useChatState = () => {
           if (messageIndex !== -1) {
             const currentMessage = messages.value[messageIndex]
             if (currentMessage) {
-              // 기존 내용에 새 데이터 추가 (스트리밍)
-              messages.value[messageIndex] = {
+              // 배열을 새로 만들어서 반응성 보장
+              const updatedMessages = [...messages.value]
+              updatedMessages[messageIndex] = {
                 ...currentMessage,
                 content: (currentMessage.content || "") + data,
+                isStreaming: true,
               }
+              messages.value = updatedMessages
             }
           }
         },
@@ -179,8 +183,45 @@ export const useChatState = () => {
           console.error("채팅 메시지 전송 실패:", err)
         },
         // onComplete: 스트림 완료 시
-        () => {
+        async () => {
+          console.log("[useChatState] onComplete 호출됨", { assistantMessageId })
           isWaitingForResponse.value = false
+          // 스트리밍 완료 표시 - Vue 반응성 보장을 위해 nextTick 사용
+          await nextTick()
+          const messageIndex = messages.value.findIndex(msg => msg.id === assistantMessageId)
+          if (messageIndex !== -1) {
+            const currentMessage = messages.value[messageIndex]
+            if (currentMessage) {
+              console.log("[useChatState] 메시지 찾음, 업데이트 시작", {
+                index: messageIndex,
+                currentIsStreaming: currentMessage.isStreaming,
+              })
+              // 메시지 객체를 완전히 새로 생성하여 반응성 보장
+              const updatedMessage: ChatMessage = {
+                id: currentMessage.id,
+                role: currentMessage.role,
+                content: currentMessage.content || "",
+                time: currentMessage.time,
+                attachments: currentMessage.attachments,
+                status: currentMessage.status,
+                isStreaming: false,
+              }
+              // 배열을 새로 만들어서 할당
+              const updatedMessages = [...messages.value]
+              updatedMessages[messageIndex] = updatedMessage
+              messages.value = updatedMessages
+              // Vue가 업데이트를 처리할 시간을 줌
+              await nextTick()
+              console.log("[useChatState] 메시지 업데이트 완료", {
+                newIsStreaming: updatedMessages[messageIndex]?.isStreaming,
+                actualIsStreaming: messages.value[messageIndex]?.isStreaming,
+              })
+            } else {
+              console.warn("[useChatState] 메시지를 찾을 수 없음", { messageIndex })
+            }
+          } else {
+            console.warn("[useChatState] 메시지 인덱스를 찾을 수 없음", { assistantMessageId })
+          }
         },
         // onConversationCreated: 서버가 conversation_created SSE로 대화방(제목) 보내면 최근 대화 맨 위에 추가
         (item) => {

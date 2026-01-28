@@ -238,6 +238,10 @@ export const useApi = () => {
         role: toChatRole(msg.role),
         content: msg.content ?? "",
         time: formatTimestamp(msg.timestamp),
+        attachments:
+          msg.attachments && msg.attachments.length > 0
+            ? msg.attachments
+            : undefined,
       }));
     } catch (error) {
       const msg =
@@ -294,11 +298,40 @@ export const useApi = () => {
   };
 
   /**
+   * SSE 스트림에서 stream_complete 이벤트를 파싱합니다.
+   * @param buffer 현재 버퍼
+   * @returns { found: 이벤트 발견 여부, remainingBuffer: 남은 버퍼 }
+   */
+  const consumeStreamCompleteEvent = (
+    buffer: string,
+  ): { found: boolean; remainingBuffer: string } => {
+    const segments = buffer.split(/\n\n/);
+    const last = segments.pop() ?? "";
+    let found = false;
+    const kept: string[] = [];
+
+    for (const seg of segments) {
+      const match = seg.match(/event:\s*stream_complete\s*\n?/i);
+      if (match) {
+        found = true;
+        // stream_complete 이벤트는 data가 없을 수 있으므로 세그먼트를 제거
+      } else {
+        kept.push(seg);
+      }
+    }
+
+    const remainingBuffer = kept.length
+      ? kept.join("\n\n") + "\n\n" + last
+      : last;
+    return { found, remainingBuffer };
+  };
+
+  /**
    * SSE 스트리밍을 통해 채팅 메시지를 전송하고 응답을 받습니다.
    * @param request 채팅 요청 데이터
    * @param onMessage 스트림에서 메시지를 받을 때 호출되는 콜백
    * @param onError 에러 발생 시 호출되는 콜백
-   * @param onComplete 스트림 완료 시 호출되는 콜백
+   * @param onComplete 스트림 완료 시 호출되는 콜백 (백엔드에서 stream_complete 이벤트를 보내면 자동 호출)
    * @param onConversationCreated conversation_created SSE 이벤트 수신 시 호출 (선택)
    * @param file 첨부 파일 (있을 경우 multipart/form-data로 전송)
    */
@@ -376,11 +409,27 @@ export const useApi = () => {
       const decoder = new TextDecoder();
       let buffer = "";
       let connectedProcessed = false;
+      let streamCompleted = false;
 
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) {
+          console.log("[SSE 스트림 완료] done=true, 버퍼 처리 시작", {
+            bufferLength: buffer.length,
+            hasOnComplete: !!onComplete,
+            streamCompleted,
+          });
+          // 마지막 버퍼에서 stream_complete 처리
+          if (!streamCompleted && onComplete) {
+            const streamCompleteParsed = consumeStreamCompleteEvent(buffer);
+            if (streamCompleteParsed.found) {
+              streamCompleted = true;
+              buffer = streamCompleteParsed.remainingBuffer;
+              console.log("[SSE 스트림 완료] stream_complete 이벤트 발견, onComplete 호출");
+              onComplete();
+            }
+          }
           // 마지막 버퍼에서 conversation_created 처리
           if (onConversationCreated) {
             let parsed = consumeConversationCreatedEvent(buffer);
@@ -399,12 +448,27 @@ export const useApi = () => {
               }
             });
           }
-          onComplete?.();
+          // stream_complete 이벤트를 받지 못한 경우에만 fallback으로 onComplete 호출
+          if (!streamCompleted) {
+            console.log("[SSE 스트림 완료] stream_complete 이벤트 없음, fallback으로 onComplete 호출");
+            onComplete?.();
+          }
           break;
         }
 
         // 청크를 텍스트로 디코딩
         buffer += decoder.decode(value, { stream: true });
+
+        // SSE "event: stream_complete" 파싱 (스트림 완료 시 서버 전송)
+        if (!streamCompleted && onComplete) {
+          const streamCompleteParsed = consumeStreamCompleteEvent(buffer);
+          if (streamCompleteParsed.found) {
+            streamCompleted = true;
+            buffer = streamCompleteParsed.remainingBuffer;
+            console.log("[SSE 스트림] stream_complete 이벤트 수신, onComplete 호출");
+            onComplete();
+          }
+        }
 
         // SSE "event: conversation_created" + "data: {...}" 파싱 (대화방 생성 시 서버 전송)
         if (onConversationCreated) {
@@ -444,14 +508,15 @@ export const useApi = () => {
         error instanceof Error
           ? error
           : new Error("알 수 없는 오류가 발생했습니다.");
-      showApiError(errorMessage.message);
       console.error("[SSE 스트리밍 오류]", {
         error: errorMessage,
         message: errorMessage.message,
         stack: errorMessage.stack,
         url,
       });
+      showApiError(errorMessage.message);
       onError?.(errorMessage as Error);
+      // 에러 발생 시에도 onComplete는 호출하지 않음 (에러 상태이므로)
       throw errorMessage;
     }
   };

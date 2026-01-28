@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import MarkdownIt from "markdown-it";
 import { Bot as BotIcon, RotateCw, User as UserIcon } from "lucide-vue-next";
 import type { ChatMessage, ChatRole } from "@/types/chat";
@@ -30,49 +30,23 @@ const md = new MarkdownIt({
 
 /**
  * 마크다운 렌더링 전 텍스트 전처리
- * 리스트 항목 앞에 빈 줄을 추가하여 마크다운-it이 제대로 인식하도록 함
+ * 서버가 마크다운을 코드 블록으로 감싸서 보내는 경우, 코드 블록을 제거하고 내용만 추출
  */
 function preprocessMarkdown(text: string): string {
   if (!text) return "";
 
-  // 먼저 리스트 항목 패턴을 찾아서 줄바꿈 추가 (한 줄로 연결된 경우 대비)
-  // 예: "1. 항목1 2. 항목2" -> "1. 항목1\n2. 항목2"
-  let processed = text;
+  let processed = text.trim();
 
-  // 숫자 리스트 항목 패턴: "숫자. " (예: "1. ", "2. ", "10. ")
-  // 이전에 리스트 항목이 아닌 문자 뒤에 오는 경우 줄바꿈 추가
-  processed = processed.replace(/([^\n])(\d+\.\s+)/g, "$1\n$2");
-
-  // 불릿 리스트 항목 패턴: "- ", "* ", "+ " (단, 이미 줄 시작에 있는 경우 제외)
-  processed = processed.replace(/([^\n])([-*+]\s+)/g, "$1\n$2");
-
-  // 줄 단위로 분리하여 처리
-  const lines = processed.split("\n");
-  const processedLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line === undefined) continue;
-
-    const prevLine: string = i > 0 ? (lines[i - 1] ?? "") : "";
-    const trimmedLine = line.trim();
-
-    // 리스트 항목 패턴: 숫자. 또는 -, *, + 로 시작하는 줄
-    // 예: "1. ", "2. ", "- ", "* ", "+ "
-    const isListItem = /^(\d+\.\s+|[-*+]\s+)/.test(trimmedLine);
-    const prevIsListItem =
-      i > 0 && prevLine ? /^(\d+\.\s+|[-*+]\s+)/.test(prevLine.trim()) : false;
-    const prevIsEmpty = prevLine ? prevLine.trim() === "" : true;
-
-    // 리스트 항목이 이전 줄이 비어있지 않고 리스트가 아닌 경우, 빈 줄 추가
-    if (isListItem && !prevIsEmpty && !prevIsListItem && i > 0) {
-      processedLines.push("");
-    }
-
-    processedLines.push(line);
+  // 서버가 마크다운을 코드 블록으로 감싸서 보내는 경우 처리
+  // 예: ```markdown\n...\n``` -> 내용만 추출
+  // 앞뒤 공백이나 다른 내용이 있어도 매칭되도록 수정
+  const markdownCodeBlockRegex = /```markdown\s*\n([\s\S]*?)\n```/;
+  const match = processed.match(markdownCodeBlockRegex);
+  if (match && match[1]) {
+    processed = match[1].trim();
   }
 
-  return processedLines.join("\n");
+  return processed;
 }
 
 // Assistant 메시지가 로딩 중인지 확인 (content가 비어있을 때)
@@ -80,7 +54,13 @@ const isLoading = computed(() => {
   return !isUserRole(props.message.role) && !props.message.content;
 });
 
+// 스트리밍 중인지 확인 (명시적으로 computed로 만들어서 반응성 보장)
+const isStreaming = computed(() => {
+  return props.message.isStreaming === true;
+});
+
 // Assistant 메시지는 마크다운으로 렌더링, 사용자 메시지는 일반 텍스트
+// 주의: 스트리밍 중인지 여부는 템플릿에서 처리하므로, 여기서는 항상 마크다운 파싱
 const renderedContent = computed(() => {
   if (isUserRole(props.message.role)) {
     return props.message.content;
@@ -97,6 +77,18 @@ const renderedContent = computed(() => {
     return props.message.content;
   }
 });
+
+// 디버깅: isStreaming 변경 감지
+watch(
+  () => props.message.isStreaming,
+  (newVal, oldVal) => {
+    console.log("[MessageBubble] isStreaming 변경 감지", {
+      messageId: props.message.id,
+      old: oldVal,
+      new: newVal,
+    });
+  },
+);
 </script>
 
 <template>
@@ -124,12 +116,15 @@ const renderedContent = computed(() => {
           {{ message.content }}
         </p>
 
-        <!-- Assistant 메시지: 로딩 애니메이션 또는 마크다운 렌더링 -->
+        <!-- Assistant 메시지: 로딩 애니메이션, 스트리밍 중 원문 표시, 또는 마크다운 렌더링 -->
         <div v-else-if="isLoading" class="flex items-center gap-1 py-1">
           <span class="loading-dot" />
           <span class="loading-dot" />
           <span class="loading-dot" />
         </div>
+        <!-- 스트리밍 중에는 원문을 그대로 표시 (마크다운 파싱 안 함) -->
+        <p v-else-if="isStreaming" class="whitespace-pre-line">{{ message.content }}</p>
+        <!-- 스트리밍 완료 후 마크다운 렌더링 -->
         <div v-else class="markdown-content" v-html="renderedContent" />
       </div>
     </div>
