@@ -56,4 +56,6 @@ export interface ChatMessage {
   status?: MessageSendStatus
   /** Assistant 메시지 한정: 스트리밍 중인지 여부 */
   isStreaming?: boolean
+  /** 페이지네이션을 위한 원본 timestamp (서버에서 받은 값) */
+  rawTimestamp?: string | number
 }

@@ -209,12 +209,38 @@ export const useApi = () => {
   /**
    * 특정 대화방의 메시지 목록을 조회합니다.
    * GET /api/v1/ai/conv/{conversationId}, USER-ID 헤더 필요.
-   * limit 쿼리는 사용하지 않습니다.
+   * @param conversationId 대화방 ID
+   * @param beforeTimestamp 이 timestamp 이전의 메시지를 가져옵니다 (선택). 없으면 최근 메시지부터 가져옵니다.
+   * @returns ChatMessage 배열 (최신순으로 정렬됨)
    */
   const fetchConversation = async (
     conversationId: string,
+    beforeTimestamp?: string | number,
   ): Promise<ChatMessage[]> => {
-    const url = `${API_BASE_URL}/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
+    // API_BASE_URL이 빈 문자열이면 상대 경로 사용 (프록시 환경)
+    const basePath = `/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
+    let url: string;
+    
+    if (API_BASE_URL) {
+      // 절대 URL 사용
+      const urlObj = new URL(basePath, API_BASE_URL);
+      if (beforeTimestamp !== undefined) {
+        urlObj.searchParams.append(
+          "beforeTimestamp",
+          String(beforeTimestamp),
+        );
+      }
+      url = urlObj.toString();
+    } else {
+      // 상대 경로 사용 (프록시 환경)
+      const params = new URLSearchParams();
+      if (beforeTimestamp !== undefined) {
+        params.append("beforeTimestamp", String(beforeTimestamp));
+      }
+      const queryString = params.toString();
+      url = queryString ? `${basePath}?${queryString}` : basePath;
+    }
+    
     try {
       const response = await fetch(url, {
         method: "GET",
@@ -234,7 +260,7 @@ export const useApi = () => {
       const data = (await response.json()) as ConversationMessageDto[];
       const list = Array.isArray(data) ? data : [];
       return list.map((msg, i) => ({
-        id: `msg-${conversationId}-${i}`,
+        id: `msg-${conversationId}-${msg.timestamp}-${i}`,
         role: toChatRole(msg.role),
         content: msg.content ?? "",
         time: formatTimestamp(msg.timestamp),
@@ -242,6 +268,8 @@ export const useApi = () => {
           msg.attachments && msg.attachments.length > 0
             ? msg.attachments
             : undefined,
+        // 페이지네이션을 위해 원본 timestamp 저장
+        rawTimestamp: msg.timestamp,
       }));
     } catch (error) {
       const msg =

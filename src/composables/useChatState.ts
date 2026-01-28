@@ -34,6 +34,11 @@ export const useChatState = () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const isWaitingForResponse = ref(false)
+  
+  // 페이지네이션 상태 관리
+  const currentConversationId = ref<string | null>(null)
+  const isLoadingMore = ref(false)
+  const hasMoreMessages = ref(true)
 
   const canSend = computed(() =>
     messageInput.value.trim().length > 0 && !isWaitingForResponse.value && !isLoading.value
@@ -44,6 +49,12 @@ export const useChatState = () => {
     try {
       isLoading.value = true
       error.value = null
+      
+      // 대화방이 변경되면 페이지네이션 상태 초기화
+      if (currentConversationId.value !== conversationId) {
+        currentConversationId.value = conversationId
+        hasMoreMessages.value = true
+      }
 
       // 선택된 대화방 표시 업데이트
       threads.value = threads.value.map(thread => ({
@@ -51,15 +62,67 @@ export const useChatState = () => {
         active: thread.conversationId === conversationId
       }))
 
-      // 해당 대화 내용 불러오기
+      // 해당 대화 내용 불러오기 (최근 20개만, beforeTimestamp 없이)
       const conversationMessages = await fetchConversation(conversationId)
       messages.value = conversationMessages
+      
+      // 서버에서 반환된 메시지가 20개 미만이면 더 이상 로드할 메시지가 없음
+      hasMoreMessages.value = conversationMessages.length >= 20
+      
       messageInput.value = ""
     } catch (err) {
       error.value = err instanceof Error ? err.message : '대화방 선택에 실패했습니다.'
       console.error('대화방 선택 실패:', err)
     } finally {
       isLoading.value = false
+    }
+  }
+  
+  /**
+   * 이전 메시지 더 불러오기 (무한 스크롤)
+   * 스크롤을 위로 올렸을 때 호출됩니다.
+   */
+  const loadMoreMessages = async (): Promise<void> => {
+    // 이미 로딩 중이거나 더 이상 메시지가 없거나 대화방이 선택되지 않았으면 리턴
+    if (
+      isLoadingMore.value ||
+      !hasMoreMessages.value ||
+      !currentConversationId.value ||
+      messages.value.length === 0
+    ) {
+      return
+    }
+
+    try {
+      isLoadingMore.value = true
+      
+      // 가장 오래된 메시지의 timestamp 찾기
+      const oldestMessage = messages.value[0]
+      if (!oldestMessage?.rawTimestamp) {
+        hasMoreMessages.value = false
+        return
+      }
+
+      // 이전 메시지 가져오기
+      const olderMessages = await fetchConversation(
+        currentConversationId.value,
+        oldestMessage.rawTimestamp,
+      )
+
+      // 서버에서 반환된 메시지가 20개 미만이면 더 이상 로드할 메시지가 없음
+      if (olderMessages.length < 20) {
+        hasMoreMessages.value = false
+      }
+
+      // 메시지 배열 앞쪽에 추가 (unshift)
+      if (olderMessages.length > 0) {
+        messages.value = [...olderMessages, ...messages.value]
+      }
+    } catch (err) {
+      console.error("이전 메시지 로드 실패:", err)
+      // 에러 발생 시에도 사용자에게는 조용히 실패 처리 (토스트는 fetchConversation 내부에서 표시됨)
+    } finally {
+      isLoadingMore.value = false
     }
   }
 
@@ -262,6 +325,8 @@ export const useChatState = () => {
     messages.value = []
     messageInput.value = ""
     isWaitingForResponse.value = false
+    currentConversationId.value = null
+    hasMoreMessages.value = true
   }
 
   const deleteThread = async (conversationId: string) => {
@@ -302,11 +367,14 @@ export const useChatState = () => {
     isLoading,
     error,
     isWaitingForResponse,
+    isLoadingMore,
+    hasMoreMessages,
     sendMessage: sendMessage as (content?: string, attachments?: File[]) => void,
     retryMessage,
     startNewChat,
     selectThread,
     deleteThread,
     renameThread,
+    loadMoreMessages,
   }
 }

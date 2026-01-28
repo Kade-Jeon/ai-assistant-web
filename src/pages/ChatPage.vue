@@ -13,7 +13,7 @@ import { nextTick, ref } from "vue"
 
 const { isDark, toggleTheme } = useTheme()
 const { isSidebarOpen, isMobile } = useSidebarState()
-const { canSend, messageInput, messages, threads, isLoading, sendMessage, retryMessage, startNewChat, selectThread, deleteThread, renameThread } = useChatState()
+const { canSend, messageInput, messages, threads, isLoading, isLoadingMore, hasMoreMessages, sendMessage, retryMessage, startNewChat, selectThread, deleteThread, renameThread, loadMoreMessages } = useChatState()
 
 // 현재 뷰 상태 ('chat' | 'dashboard')
 const currentView = ref<'chat' | 'dashboard'>('chat')
@@ -100,7 +100,15 @@ const handleNewChat = () => handleViewChange('chat')
         <!-- 채팅 뷰: 버블 영역 기준 토스트용 컨테이너 -->
         <div v-show="currentView === 'chat'" class="flex-1 flex flex-col min-h-0">
           <div class="flex-1 min-h-0 relative flex flex-col">
-            <ChatMessageList :messages="messages" :is-sidebar-open="isSidebarOpen" :is-loading="isLoading" @retry="retryMessage" />
+            <ChatMessageList 
+              :messages="messages" 
+              :is-sidebar-open="isSidebarOpen" 
+              :is-loading="isLoading"
+              :is-loading-more="isLoadingMore"
+              :has-more-messages="hasMoreMessages"
+              @retry="retryMessage"
+              @load-more="loadMoreMessages"
+            />
             <div id="chat-toast-container" class="absolute inset-0 pointer-events-none flex items-start justify-center pt-20 z-[100]" aria-hidden="true" />
           </div>
           <ChatInput v-model="messageInput" :can-send="canSend" @send="(value, attachments) => sendMessage(value, attachments)" />
