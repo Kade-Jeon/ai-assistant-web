@@ -20,7 +20,7 @@ const emit = defineEmits<{
 // 자동 스크롤을 위한 ref
 const messageContainer = ref<HTMLDivElement>();
 const previousScrollHeight = ref(0);
-const isInitialLoad = ref(true);
+const shouldScrollToBottom = ref(true);
 
 // 스크롤 이벤트 핸들러 (throttle 적용)
 let scrollTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -34,6 +34,12 @@ const handleScroll = () => {
     
     const container = messageContainer.value;
     const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+    
+    // 사용자가 스크롤을 조작하면 자동 스크롤 비활성화
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+    shouldScrollToBottom.value = isAtBottom;
     
     // 스크롤이 맨 위에서 100px 이내일 때 이전 메시지 로드
     if (
@@ -56,16 +62,16 @@ watch(
     if (!messageContainer.value) return;
     
     const container = messageContainer.value;
-    const wasAtBottom = 
-      container.scrollHeight - container.scrollTop - container.clientHeight < 50;
     
     // 이전 메시지를 로드한 경우 (메시지가 앞쪽에 추가됨)
     if (oldMessages && newMessages.length > oldMessages.length) {
-      const addedCount = newMessages.length - oldMessages.length;
       const firstNewMessage = newMessages[0];
+      const lastNewMessage = newMessages[newMessages.length - 1];
       const wasFirstInOld = oldMessages[0]?.id === firstNewMessage?.id;
+      const wasLastInOld = oldMessages[oldMessages.length - 1]?.id === lastNewMessage?.id;
       
-      if (!wasFirstInOld && addedCount > 0) {
+      // 앞쪽에 메시지가 추가된 경우 (이전 메시지 로드)
+      if (!wasFirstInOld && wasLastInOld) {
         // 스크롤 위치 유지 (새 메시지가 추가되어도 스크롤이 튀지 않도록)
         const newScrollHeight = container.scrollHeight;
         const heightDiff = newScrollHeight - previousScrollHeight.value;
@@ -75,23 +81,29 @@ watch(
       }
     }
     
-    // 초기 로드이거나 새 메시지가 추가된 경우 맨 아래로 스크롤
-    if (isInitialLoad.value || wasAtBottom) {
-      container.scrollTop = container.scrollHeight;
-      isInitialLoad.value = false;
-    }
+    // 새 메시지가 뒤쪽에 추가된 경우 (사용자가 메시지를 보냈거나 AI 응답이 온 경우)
+    // 항상 맨 아래로 스크롤
+    await nextTick();
+    container.scrollTop = container.scrollHeight;
+    shouldScrollToBottom.value = true;
     
     previousScrollHeight.value = container.scrollHeight;
   },
   { deep: true },
 );
 
-// 로딩 상태가 변경될 때 초기 로드 플래그 리셋
+// 로딩 상태가 변경될 때 (채팅방 변경 시 초기 로드)
 watch(
   () => props.isLoading,
-  (isLoading) => {
-    if (!isLoading && props.messages.length > 0) {
-      isInitialLoad.value = false;
+  async (isLoading, wasLoading) => {
+    // 로딩이 끝났고, 이전에 로딩 중이었고, 메시지가 있으면 맨 아래로 스크롤
+    if (!isLoading && wasLoading && props.messages.length > 0) {
+      shouldScrollToBottom.value = true;
+      await nextTick();
+      if (messageContainer.value) {
+        messageContainer.value.scrollTop = messageContainer.value.scrollHeight;
+        previousScrollHeight.value = messageContainer.value.scrollHeight;
+      }
     }
   },
 );
