@@ -4,6 +4,7 @@ import ChatInput from "@/components/chat/ChatInput.vue";
 import ChatMessageList from "@/components/chat/ChatMessageList.vue";
 import ChatSidebar from "@/components/chat/ChatSidebar.vue";
 import Dashboard from "@/components/Dashboard.vue";
+import PricingPage from "@/pages/PricingPage.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useApi } from "@/composables/useApi";
@@ -37,8 +38,8 @@ const {
   loadMoreMessages,
 } = useChatState();
 
-// 현재 뷰 상태 ('chat' | 'dashboard')
-const currentView = ref<"chat" | "dashboard">("chat");
+// 현재 뷰 상태 ('chat' | 'dashboard' | 'pricing')
+const currentView = ref<"chat" | "dashboard" | "pricing">("chat");
 
 // 제목 변경 플로팅 폼
 const renamingConversationId = ref<string | null>(null);
@@ -112,7 +113,7 @@ const handleCustomizeConfirm = async () => {
 
 // 공통 뷰 변경 핸들러
 const handleViewChange = (
-  view: "chat" | "dashboard",
+  view: "chat" | "dashboard" | "pricing",
   conversationId?: string,
 ) => {
   console.log(
@@ -152,6 +153,16 @@ const handleDashboard = () => handleViewChange("dashboard");
 const handleSelectThread = (conversationId: string) =>
   handleViewChange("chat", conversationId);
 const handleNewChat = () => handleViewChange("chat");
+const handlePlanUpgrade = () => {
+  handleViewChange("pricing");
+};
+const handlePricingBack = () => {
+  currentView.value = "chat";
+};
+
+const handleHelp = (_section?: string) => {
+  // 도움말 섹션별 처리 (center, release-notes, terms, support, bug) 추후 연결
+};
 </script>
 
 <template>
@@ -167,6 +178,8 @@ const handleNewChat = () => handleViewChange("chat");
       @rename="openRenameForm"
       @delete="deleteThread"
       @customize="openCustomizeForm"
+      @plan-upgrade="handlePlanUpgrade"
+      @help="handleHelp"
       @logout="logout"
     />
     <div class="flex-1 flex flex-col overflow-hidden">
@@ -214,6 +227,14 @@ const handleNewChat = () => handleViewChange("chat");
             :is-visible="currentView === 'dashboard'"
             @back-to-chat="currentView = 'chat'"
           />
+        </div>
+
+        <!-- 가격(플랜 업그레이드) 뷰 -->
+        <div
+          v-show="currentView === 'pricing'"
+          class="flex-1 flex flex-col min-h-0 overflow-hidden"
+        >
+          <PricingPage :user-plan="userPlan" @back="handlePricingBack" />
         </div>
       </div>
     </div>

@@ -1,20 +1,20 @@
 <script setup lang="ts">
-import ChatSidebarSearch from "./ChatSidebarSearch.vue"
-import ChatSidebarMenu from "./ChatSidebarMenu.vue"
-import ChatSidebarHistory from "./ChatSidebarHistory.vue"
-import type { ChatThread } from "@/types/chat"
+import ChatSidebarSearch from "./ChatSidebarSearch.vue";
+import ChatSidebarMenu from "./ChatSidebarMenu.vue";
+import ChatSidebarHistory from "./ChatSidebarHistory.vue";
+import type { ChatThread } from "@/types/chat";
 
 defineProps<{
-  threads: ChatThread[]
-  currentView: 'chat' | 'dashboard'
-}>()
+  threads: ChatThread[];
+  currentView: "chat" | "dashboard" | "pricing";
+}>();
 
 defineEmits<{
-  (e: "dashboard"): void
-  (e: "select-thread"): [conversationId: string]
-  (e: "rename"): [conversationId: string]
-  (e: "delete"): [conversationId: string]
-}>()
+  (e: "dashboard"): void;
+  (e: "select-thread", conversationId: string): void;
+  (e: "rename", conversationId: string): void;
+  (e: "delete", conversationId: string): void;
+}>();
 </script>
 
 <template>

@@ -5,6 +5,9 @@ import {
   DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "reka-ui";
 import {
@@ -14,6 +17,12 @@ import {
   SlidersHorizontal,
   HelpCircle,
   LogOut,
+  ChevronRight,
+  MessageCircleQuestionMark,
+  NotebookPen,
+  BookText,
+  HeartHandshake,
+  Bug,
 } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 
@@ -25,7 +34,7 @@ const emit = defineEmits<{
   (e: "plan-upgrade"): void;
   (e: "customize"): void;
   (e: "settings"): void;
-  (e: "help"): void;
+  (e: "help", section?: string): void;
   (e: "logout"): void;
 }>();
 </script>
@@ -97,13 +106,57 @@ const emit = defineEmits<{
             <DropdownMenuSeparator
               class="my-1 h-px w-full shrink-0 bg-border"
             />
-            <DropdownMenuItem
-              class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
-              @select="emit('help')"
-            >
-              <HelpCircle class="h-4 w-4 shrink-0" />
-              <span>도움말</span>
-            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger
+                class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200 focus:bg-slate-200 data-[state=open]:bg-slate-200"
+              >
+                <HelpCircle class="h-4 w-4 shrink-0" />
+                <span>도움말</span>
+                <ChevronRight class="ml-auto h-4 w-4 shrink-0" />
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent
+                  class="z-50 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                  :side-offset="4"
+                >
+                  <DropdownMenuItem
+                    class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
+                    @select="emit('help', 'center')"
+                  >
+                    <MessageCircleQuestionMark class="h-4 w-4 shrink-0" />
+                    <span>도움말 센터</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
+                    @select="emit('help', 'release-notes')"
+                  >
+                    <NotebookPen class="h-4 w-4 shrink-0" />
+                    <span>릴리즈 노트</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
+                    @select="emit('help', 'terms')"
+                  >
+                    <BookText class="h-4 w-4 shrink-0" />
+                    <span>이용약관 및 정책</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
+                    @select="emit('help', 'support')"
+                  >
+                    <HeartHandshake class="h-4 w-4 shrink-0" />
+                    <span>고객센터</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
+                    @select="emit('help', 'bug')"
+                  >
+                    <Bug class="h-4 w-4 shrink-0" />
+                    <span>버그신고</span>
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
             <DropdownMenuItem
               class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
               @select="emit('logout')"

@@ -7,19 +7,26 @@ import type { ChatThread } from "@/types/chat";
 defineProps<{
   threads: ChatThread[];
   isOpen: boolean;
-  currentView: "chat" | "dashboard";
+  currentView: "chat" | "dashboard" | "pricing";
   userPlan?: string | null;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "new-chat"): void;
   (e: "dashboard"): void;
-  (e: "select-thread"): [conversationId: string];
-  (e: "rename"): [conversationId: string];
-  (e: "delete"): [conversationId: string];
+  (e: "select-thread", conversationId: string): void;
+  (e: "rename", conversationId: string): void;
+  (e: "delete", conversationId: string): void;
   (e: "customize"): void;
+  (e: "plan-upgrade"): void;
+  (e: "help", section?: string): void;
   (e: "logout"): void;
 }>();
+
+const handleSelectThread = (conversationId: string) =>
+  emit("select-thread", conversationId);
+const handleRename = (conversationId: string) => emit("rename", conversationId);
+const handleDelete = (conversationId: string) => emit("delete", conversationId);
 </script>
 
 <template>
@@ -32,19 +39,21 @@ defineEmits<{
     leave-to-class="transform -translate-x-full"
   >
     <div v-if="isOpen" class="w-64 bg-sidebar border-r flex flex-col h-full">
-      <ChatSidebarHeader @new-chat="$emit('new-chat')" />
+      <ChatSidebarHeader @new-chat="emit('new-chat')" />
       <ChatSidebarContent
         :threads="threads"
         :currentView="currentView"
-        @dashboard="$emit('dashboard')"
-        @select-thread="$emit('select-thread', $event)"
-        @rename="$emit('rename', $event)"
-        @delete="$emit('delete', $event)"
+        @dashboard="emit('dashboard')"
+        @select-thread="handleSelectThread"
+        @rename="handleRename"
+        @delete="handleDelete"
       />
       <ChatSidebarFooter
         :user-plan="userPlan"
-        @customize="$emit('customize')"
-        @logout="$emit('logout')"
+        @customize="emit('customize')"
+        @plan-upgrade="emit('plan-upgrade')"
+        @help="(section) => emit('help', section)"
+        @logout="emit('logout')"
       />
     </div>
   </transition>
