@@ -6,7 +6,7 @@ import {
   DropdownMenuRoot,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "reka-ui"
+} from "reka-ui";
 import {
   Settings,
   User,
@@ -14,16 +14,20 @@ import {
   SlidersHorizontal,
   HelpCircle,
   LogOut,
-} from "lucide-vue-next"
-import { Button } from "@/components/ui/button"
+} from "lucide-vue-next";
+import { Button } from "@/components/ui/button";
+
+defineProps<{
+  userPlan?: string | null;
+}>();
 
 const emit = defineEmits<{
-  (e: "plan-upgrade"): void
-  (e: "customize"): void
-  (e: "settings"): void
-  (e: "help"): void
-  (e: "logout"): void
-}>()
+  (e: "plan-upgrade"): void;
+  (e: "customize"): void;
+  (e: "settings"): void;
+  (e: "help"): void;
+  (e: "logout"): void;
+}>();
 </script>
 
 <template>
@@ -34,11 +38,18 @@ const emit = defineEmits<{
       <User class="h-4 w-4 shrink-0" />
       <div class="min-w-0 flex-1 flex flex-col">
         <span class="font-medium">kade</span>
-        <span class="text-sidebar-foreground/70 text-xs">Free Plan</span>
+        <span class="text-sidebar-foreground/70 text-xs">{{
+          userPlan || "Free Plan"
+        }}</span>
       </div>
       <DropdownMenuRoot>
         <DropdownMenuTrigger :as-child="true">
-          <Button variant="ghost" size="icon" class="ml-auto h-7 w-7" aria-label="프로필 메뉴">
+          <Button
+            variant="ghost"
+            size="icon"
+            class="ml-auto h-7 w-7"
+            aria-label="프로필 메뉴"
+          >
             <Settings class="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -50,16 +61,18 @@ const emit = defineEmits<{
             :side-offset="8"
           >
             <!-- 사이드바 푸터와 동일한 프로필 영역 (톱니바퀴만 제외) -->
-            <div
-              class="flex items-center gap-2 px-2 py-2 text-xs"
-            >
+            <div class="flex items-center gap-2 px-2 py-2 text-xs">
               <User class="h-4 w-4 shrink-0" />
               <div class="flex flex-col">
                 <span class="font-medium">kade</span>
-                <span class="text-muted-foreground text-xs">Free Plan</span>
+                <span class="text-muted-foreground text-xs">{{
+                  userPlan || "Free Plan"
+                }}</span>
               </div>
             </div>
-            <DropdownMenuSeparator class="my-1 h-px w-full shrink-0 bg-border" />
+            <DropdownMenuSeparator
+              class="my-1 h-px w-full shrink-0 bg-border"
+            />
             <DropdownMenuItem
               class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
               @select="emit('plan-upgrade')"
@@ -81,7 +94,9 @@ const emit = defineEmits<{
               <Settings class="h-4 w-4 shrink-0" />
               <span>설정</span>
             </DropdownMenuItem>
-            <DropdownMenuSeparator class="my-1 h-px w-full shrink-0 bg-border" />
+            <DropdownMenuSeparator
+              class="my-1 h-px w-full shrink-0 bg-border"
+            />
             <DropdownMenuItem
               class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-slate-200"
               @select="emit('help')"

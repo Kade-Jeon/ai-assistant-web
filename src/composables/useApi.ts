@@ -12,6 +12,7 @@ import {
   showApiError,
   showApiSuccess,
 } from "@/composables/useApiError";
+import { getUserIdCookie } from "@/lib/cookies";
 
 // API base URL - 환경 변수로 관리 가능
 // 개발 환경에서 Vite 프록시를 사용하는 경우 빈 문자열 사용
@@ -19,8 +20,18 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? "" : "http://localhost:8080");
 
-/** 대화 목록/채팅 요청 시 사용하는 사용자 식별자 (환경변수 우선) */
-const USER_ID = import.meta.env.VITE_USER_ID ?? "kade@thekade.com";
+/**
+ * 쿠키에서 사용자 ID를 가져옵니다.
+ * 쿠키에 없으면 환경변수 또는 기본값을 사용합니다 (하위 호환성).
+ */
+const getUserId = (): string => {
+  const cookieUserId = getUserIdCookie();
+  if (cookieUserId) {
+    return cookieUserId;
+  }
+  // 하위 호환성: 환경변수 또는 기본값
+  return import.meta.env.VITE_USER_ID ?? "kade@thekade.com";
+};
 
 /** role 문자열을 ChatRole로 매핑 (system/tool은 assistant로 표시). 대소문자 무시(USER→user). */
 const toChatRole = (role: string): ChatRole =>
@@ -79,6 +90,140 @@ function formatTimestamp(
 
 export const useApi = () => {
   /**
+   * 로그인 요청을 보냅니다.
+   * POST /api/v1/auth/login
+   * @param emailId 이메일
+   * @param password 비밀번호
+   * @returns 로그인 응답 (userId, emailId, plan)
+   */
+  const login = async (
+    emailId: string,
+    password: string,
+  ): Promise<{ userId: string; emailId: string; plan: string }> => {
+    const url = `${API_BASE_URL}/api/v1/auth/login`;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ emailId, password }),
+      });
+
+      if (!response.ok) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "로그인에 실패했습니다.",
+        );
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as {
+        userId: string;
+        emailId: string;
+        plan: string;
+      };
+
+      return data;
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "로그인에 실패했습니다.";
+      showApiError(msg);
+      console.error("로그인 실패:", error);
+      throw error instanceof Error ? error : new Error(msg);
+    }
+  };
+
+  /** 개인 맞춤 설정 응답 타입 */
+  type PreferenceResponse = {
+    nickname: string | null;
+    occupation: string | null;
+    extraInfo: string | null;
+  };
+
+  /** 개인 맞춤 설정 요청 타입 */
+  type PreferenceRequest = {
+    nickname?: string;
+    occupation?: string;
+    extraInfo?: string;
+  };
+
+  /**
+   * 개인 맞춤 설정을 조회합니다.
+   * GET /api/v1/ai/pref, USER-ID 헤더 필요.
+   */
+  const getPreference = async (): Promise<PreferenceResponse> => {
+    const url = `${API_BASE_URL}/api/v1/ai/pref`;
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "USER-ID": getUserId(),
+        },
+      });
+
+      if (!response.ok) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "개인 맞춤 설정을 불러오는데 실패했습니다.",
+        );
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as PreferenceResponse;
+      return data;
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "개인 맞춤 설정을 불러오는데 실패했습니다.";
+      showApiError(msg);
+      console.error("개인 맞춤 설정 조회 실패:", error);
+      throw error instanceof Error ? error : new Error(msg);
+    }
+  };
+
+  /**
+   * 개인 맞춤 설정을 저장합니다.
+   * POST /api/v1/ai/pref, USER-ID 헤더, body: PreferenceRequest.
+   */
+  const updatePreference = async (
+    request: PreferenceRequest,
+  ): Promise<PreferenceResponse> => {
+    const url = `${API_BASE_URL}/api/v1/ai/pref`;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "USER-ID": getUserId(),
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "개인 맞춤 설정 저장에 실패했습니다.",
+        );
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as PreferenceResponse;
+      showApiSuccess("개인 맞춤 설정이 저장되었습니다.");
+      return data;
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "개인 맞춤 설정 저장에 실패했습니다.";
+      showApiError(msg);
+      console.error("개인 맞춤 설정 저장 실패:", error);
+      throw error instanceof Error ? error : new Error(msg);
+    }
+  };
+
+  /**
    * 대화 목록을 조회합니다.
    * GET /api/v1/ai/conv, USER-ID 헤더 필요.
    * 응답을 ChatThread 형태(id, title, active, conversationId)로 변환해 반환합니다.
@@ -89,7 +234,7 @@ export const useApi = () => {
       const response = await fetch(url, {
         method: "GET",
         headers: {
-          "USER-ID": USER_ID,
+          "USER-ID": getUserId(),
         },
       });
 
@@ -131,7 +276,7 @@ export const useApi = () => {
       const response = await fetch(url, {
         method: "DELETE",
         headers: {
-          "USER-ID": USER_ID,
+          "USER-ID": getUserId(),
         },
       });
 
@@ -156,7 +301,9 @@ export const useApi = () => {
         showApiError(msg);
       }
       console.error("대화 삭제 실패:", error);
-      throw error instanceof Error ? error : new Error("대화를 삭제하는 데 실패했습니다.");
+      throw error instanceof Error
+        ? error
+        : new Error("대화를 삭제하는 데 실패했습니다.");
     }
   };
 
@@ -176,7 +323,7 @@ export const useApi = () => {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "USER-ID": USER_ID,
+          "USER-ID": getUserId(),
         },
         body: JSON.stringify({ subject: subject.trim() }),
       });
@@ -196,13 +343,13 @@ export const useApi = () => {
     } catch (error) {
       if (!errorAlreadyShown) {
         const msg =
-          error instanceof Error
-            ? error.message
-            : "제목 변경에 실패했습니다.";
+          error instanceof Error ? error.message : "제목 변경에 실패했습니다.";
         showApiError(msg);
       }
       console.error("제목 변경 실패:", error);
-      throw error instanceof Error ? error : new Error("제목 변경에 실패했습니다.");
+      throw error instanceof Error
+        ? error
+        : new Error("제목 변경에 실패했습니다.");
     }
   };
 
@@ -220,15 +367,12 @@ export const useApi = () => {
     // API_BASE_URL이 빈 문자열이면 상대 경로 사용 (프록시 환경)
     const basePath = `/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
     let url: string;
-    
+
     if (API_BASE_URL) {
       // 절대 URL 사용
       const urlObj = new URL(basePath, API_BASE_URL);
       if (beforeTimestamp !== undefined) {
-        urlObj.searchParams.append(
-          "beforeTimestamp",
-          String(beforeTimestamp),
-        );
+        urlObj.searchParams.append("beforeTimestamp", String(beforeTimestamp));
       }
       url = urlObj.toString();
     } else {
@@ -240,12 +384,12 @@ export const useApi = () => {
       const queryString = params.toString();
       url = queryString ? `${basePath}?${queryString}` : basePath;
     }
-    
+
     try {
       const response = await fetch(url, {
         method: "GET",
         headers: {
-          "USER-ID": USER_ID,
+          "USER-ID": getUserId(),
         },
       });
 
@@ -388,7 +532,7 @@ export const useApi = () => {
 
       const commonHeaders: HeadersInit = {
         Accept: "text/event-stream",
-        "USER-ID": USER_ID,
+        "USER-ID": getUserId(),
       };
 
       if (file) {
@@ -454,7 +598,9 @@ export const useApi = () => {
             if (streamCompleteParsed.found) {
               streamCompleted = true;
               buffer = streamCompleteParsed.remainingBuffer;
-              console.log("[SSE 스트림 완료] stream_complete 이벤트 발견, onComplete 호출");
+              console.log(
+                "[SSE 스트림 완료] stream_complete 이벤트 발견, onComplete 호출",
+              );
               onComplete();
             }
           }
@@ -478,7 +624,9 @@ export const useApi = () => {
           }
           // stream_complete 이벤트를 받지 못한 경우에만 fallback으로 onComplete 호출
           if (!streamCompleted) {
-            console.log("[SSE 스트림 완료] stream_complete 이벤트 없음, fallback으로 onComplete 호출");
+            console.log(
+              "[SSE 스트림 완료] stream_complete 이벤트 없음, fallback으로 onComplete 호출",
+            );
             onComplete?.();
           }
           break;
@@ -493,7 +641,9 @@ export const useApi = () => {
           if (streamCompleteParsed.found) {
             streamCompleted = true;
             buffer = streamCompleteParsed.remainingBuffer;
-            console.log("[SSE 스트림] stream_complete 이벤트 수신, onComplete 호출");
+            console.log(
+              "[SSE 스트림] stream_complete 이벤트 수신, onComplete 호출",
+            );
             onComplete();
           }
         }
@@ -550,6 +700,9 @@ export const useApi = () => {
   };
 
   return {
+    login,
+    getPreference,
+    updatePreference,
     fetchChatThreads,
     fetchConversation,
     sendChatMessage,

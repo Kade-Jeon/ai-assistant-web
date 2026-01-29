@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import ChatSidebarHeader from "./sidebar/ChatSidebarHeader.vue"
-import ChatSidebarContent from "./sidebar/ChatSidebarContent.vue"
-import ChatSidebarFooter from "./sidebar/ChatSidebarFooter.vue"
-import type { ChatThread } from "@/types/chat"
+import ChatSidebarHeader from "./sidebar/ChatSidebarHeader.vue";
+import ChatSidebarContent from "./sidebar/ChatSidebarContent.vue";
+import ChatSidebarFooter from "./sidebar/ChatSidebarFooter.vue";
+import type { ChatThread } from "@/types/chat";
 
 defineProps<{
-  threads: ChatThread[]
-  isOpen: boolean
-  currentView: 'chat' | 'dashboard'
-}>()
+  threads: ChatThread[];
+  isOpen: boolean;
+  currentView: "chat" | "dashboard";
+  userPlan?: string | null;
+}>();
 
 defineEmits<{
-  (e: "new-chat"): void
-  (e: "dashboard"): void
-  (e: "select-thread"): [conversationId: string]
-  (e: "rename"): [conversationId: string]
-  (e: "delete"): [conversationId: string]
-}>()
+  (e: "new-chat"): void;
+  (e: "dashboard"): void;
+  (e: "select-thread"): [conversationId: string];
+  (e: "rename"): [conversationId: string];
+  (e: "delete"): [conversationId: string];
+  (e: "customize"): void;
+  (e: "logout"): void;
+}>();
 </script>
 
 <template>
@@ -38,7 +41,11 @@ defineEmits<{
         @rename="$emit('rename', $event)"
         @delete="$emit('delete', $event)"
       />
-      <ChatSidebarFooter />
+      <ChatSidebarFooter
+        :user-plan="userPlan"
+        @customize="$emit('customize')"
+        @logout="$emit('logout')"
+      />
     </div>
   </transition>
 </template>
