@@ -214,6 +214,8 @@ export const useChatState = () => {
     try {
       // 첨부 파일이 있으면 첫 번째 파일만 전송 (백엔드가 단일 파일만 지원)
       const fileToSend = attachments && attachments.length > 0 ? attachments[0] : undefined
+      // 재시도 시 중복 저장 방지용 (한 번만 생성, 재시도 시 동일 키 사용)
+      const idempotencyKey = crypto.randomUUID()
 
       // SSE 스트리밍 시작
       await sendChatMessage(
@@ -299,8 +301,27 @@ export const useChatState = () => {
             .filter((t) => t.conversationId !== item.conversationId)
           threads.value = [newThread, ...others]
         },
+        // onAlreadyCompleted: 같은 Idempotency-Key로 이미 완료된 요청 → 해당 대화로 이동
+        async (conversationId: string) => {
+          isWaitingForResponse.value = false
+          const exists = threads.value.some((t) => t.conversationId === conversationId)
+          if (!exists) {
+            const newThread: ChatThread = {
+              id: conversationId,
+              title: "대화",
+              active: true,
+              conversationId,
+            }
+            threads.value = [
+              newThread,
+              ...threads.value.map((t) => ({ ...t, active: false })),
+            ]
+          }
+          await selectThread(conversationId)
+        },
         // file: 첨부 파일 전달
-        fileToSend
+        fileToSend,
+        idempotencyKey
       )
     } catch (err) {
       messages.value = messages.value

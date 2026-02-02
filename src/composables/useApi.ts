@@ -498,14 +498,126 @@ export const useApi = () => {
     return { found, remainingBuffer };
   };
 
+  /** SSE event: error 시 data JSON 구조 */
+  type StreamErrorPayload = {
+    code?: string;
+    message?: string;
+    retryable?: boolean;
+  };
+
+  /**
+   * SSE 스트림에서 error 이벤트를 파싱합니다.
+   * data는 JSON 문자열 (code, message, retryable).
+   */
+  const consumeErrorEvent = (
+    buffer: string,
+  ): {
+    found: boolean;
+    code?: string;
+    message?: string;
+    retryable: boolean;
+    remainingBuffer: string;
+  } => {
+    const segments = buffer.split(/\n\n/);
+    const last = segments.pop() ?? "";
+    let result: {
+      found: boolean;
+      code?: string;
+      message?: string;
+      retryable: boolean;
+      remainingBuffer: string;
+    } = {
+      found: false,
+      retryable: false,
+      remainingBuffer: buffer,
+    };
+    const kept: string[] = [];
+
+    for (const seg of segments) {
+      const match = seg.match(/event:\s*error\s*\ndata:\s*([\s\S]*)/i);
+      const dataPart = match?.[1];
+      if (dataPart !== undefined) {
+        try {
+          const raw = dataPart.trim();
+          const parsed = JSON.parse(raw) as StreamErrorPayload;
+          result = {
+            found: true,
+            code: typeof parsed?.code === "string" ? parsed.code : undefined,
+            message:
+              typeof parsed?.message === "string" ? parsed.message : undefined,
+            retryable: parsed?.retryable !== false,
+            remainingBuffer: "",
+          };
+          break;
+        } catch {
+          kept.push(seg);
+        }
+      } else {
+        kept.push(seg);
+      }
+    }
+
+    if (!result.found) {
+      result.remainingBuffer =
+        kept.length > 0 ? kept.join("\n\n") + "\n\n" + last : last;
+    }
+    return result;
+  };
+
+  /**
+   * SSE 스트림에서 already_completed 이벤트를 파싱합니다.
+   * data: { "conversationId": "..." }
+   */
+  const consumeAlreadyCompletedEvent = (
+    buffer: string,
+  ): { found: boolean; conversationId?: string; remainingBuffer: string } => {
+    const segments = buffer.split(/\n\n/);
+    const last = segments.pop() ?? "";
+    let found = false;
+    let conversationId: string | undefined;
+    const kept: string[] = [];
+
+    for (const seg of segments) {
+      const match = seg.match(
+        /event:\s*already_completed\s*\ndata:\s*([\s\S]*)/i,
+      );
+      const dataPart = match?.[1];
+      if (dataPart !== undefined) {
+        try {
+          const raw = dataPart.trim();
+          const parsed = JSON.parse(raw) as { conversationId?: string };
+          if (typeof parsed?.conversationId === "string") {
+            found = true;
+            conversationId = parsed.conversationId;
+          }
+          break;
+        } catch {
+          kept.push(seg);
+        }
+      } else {
+        kept.push(seg);
+      }
+    }
+
+    const remainingBuffer =
+      kept.length > 0 ? kept.join("\n\n") + "\n\n" + last : last;
+    return { found, conversationId, remainingBuffer };
+  };
+
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS_MS = [0, 1000, 2000];
+
   /**
    * SSE 스트리밍을 통해 채팅 메시지를 전송하고 응답을 받습니다.
+   * 재시도 시 동일한 idempotencyKey를 사용하면 백엔드가 중복 저장을 방지합니다.
    * @param request 채팅 요청 데이터
    * @param onMessage 스트림에서 메시지를 받을 때 호출되는 콜백
    * @param onError 에러 발생 시 호출되는 콜백
    * @param onComplete 스트림 완료 시 호출되는 콜백 (백엔드에서 stream_complete 이벤트를 보내면 자동 호출)
    * @param onConversationCreated conversation_created SSE 이벤트 수신 시 호출 (선택)
+   * @param onAlreadyCompleted already_completed 수신 시 호출 (같은 Idempotency-Key로 이미 완료된 요청)
    * @param file 첨부 파일 (있을 경우 multipart/form-data로 전송)
+   * @param idempotencyKey 재시도 시 중복 방지용 키 (메시지 전송 시 1회 생성, 재시도 시 동일 키 사용)
    */
   const sendChatMessage = async (
     request: AssistantRequest,
@@ -513,29 +625,32 @@ export const useApi = () => {
     onError?: (error: Error) => void,
     onComplete?: () => void,
     onConversationCreated?: (item: UserConversationItemDto) => void,
+    onAlreadyCompleted?: (conversationId: string) => void,
     file?: File,
+    idempotencyKey?: string,
   ): Promise<void> => {
     const url = `${API_BASE_URL}/api/v1/ai/conv`;
 
-    console.log("[SSE 요청 시작]", {
-      url,
-      method: "POST",
-      body: request,
-      hasFile: !!file,
-      fileName: file?.name,
-      apiBaseUrl: API_BASE_URL,
-    });
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const delayMs = RETRY_DELAYS_MS[attempt] ?? 2000;
+      if (attempt > 0) {
+        console.log("[SSE 재시도]", { attempt, delayMs, idempotencyKey });
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
 
-    try {
-      let requestBody: BodyInit;
-      let headers: HeadersInit;
+      try {
+        let requestBody: BodyInit;
+        let headers: HeadersInit;
 
-      const commonHeaders: HeadersInit = {
-        Accept: "text/event-stream",
-        "USER-ID": getUserId(),
-      };
+        const commonHeaders: HeadersInit = {
+          Accept: "text/event-stream",
+          "USER-ID": getUserId(),
+          ...(idempotencyKey && {
+            "X-Idempotency-Key": idempotencyKey,
+          }),
+        };
 
-      if (file) {
+        if (file) {
         // 파일이 있는 경우: multipart/form-data로 전송
         const formData = new FormData();
         formData.append("file", file);
@@ -565,12 +680,24 @@ export const useApi = () => {
         headers: Object.fromEntries(response.headers.entries()),
       });
 
+      if (response.status === 409) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "동일한 Idempotency-Key로 요청이 이미 처리 중입니다.",
+        );
+        const conflictError = new Error(message) as Error & { is409?: boolean };
+        conflictError.is409 = true;
+        throw conflictError;
+      }
+
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
           `요청 처리에 실패했습니다. (${response.status})`,
         );
-        throw new Error(message);
+        const err = new Error(message) as Error & { retryable?: boolean };
+        err.retryable = response.status >= 500;
+        throw err;
       }
 
       if (!response.body) {
@@ -622,18 +749,49 @@ export const useApi = () => {
               }
             });
           }
-          // stream_complete 이벤트를 받지 못한 경우에만 fallback으로 onComplete 호출
+          // stream_complete 전에 연결이 끊기면 실패로 간주하고 재시도 대상
           if (!streamCompleted) {
-            console.log(
-              "[SSE 스트림 완료] stream_complete 이벤트 없음, fallback으로 onComplete 호출",
+            console.warn(
+              "[SSE 스트림] stream_complete 없이 연결 종료, 재시도 대상",
             );
-            onComplete?.();
+            const dropErr = new Error(
+              "스트림이 완료되지 않고 연결이 끊겼습니다.",
+            ) as Error & { retryable?: boolean };
+            dropErr.retryable = true;
+            throw dropErr;
           }
           break;
         }
 
         // 청크를 텍스트로 디코딩
         buffer += decoder.decode(value, { stream: true });
+
+        // SSE "event: already_completed" (같은 Idempotency-Key로 이미 완료된 요청)
+        if (onAlreadyCompleted) {
+          const ac = consumeAlreadyCompletedEvent(buffer);
+          if (ac.found && ac.conversationId) {
+            console.log("[SSE] already_completed 수신", ac.conversationId);
+            onAlreadyCompleted(ac.conversationId);
+            return;
+          }
+        }
+
+        // SSE "event: error" (구조화된 에러, data는 JSON 문자열)
+        const errParsed = consumeErrorEvent(buffer);
+        if (errParsed.found) {
+          const msg =
+            errParsed.message ?? "AI 응답 생성 중 오류가 발생했습니다.";
+          const streamErr = new Error(msg) as Error & { retryable?: boolean };
+          streamErr.retryable = errParsed.retryable;
+          console.error("[SSE] error 이벤트 수신", {
+            code: errParsed.code,
+            message: msg,
+            retryable: errParsed.retryable,
+          });
+          showApiError(msg);
+          onError?.(streamErr);
+          throw streamErr;
+        }
 
         // SSE "event: stream_complete" 파싱 (스트림 완료 시 서버 전송)
         if (!streamCompleted && onComplete) {
@@ -681,22 +839,43 @@ export const useApi = () => {
         // 버퍼 업데이트 (불완전한 JSON은 남김)
         buffer = remainingBuffer;
       }
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error
-          : new Error("알 수 없는 오류가 발생했습니다.");
-      console.error("[SSE 스트리밍 오류]", {
-        error: errorMessage,
-        message: errorMessage.message,
-        stack: errorMessage.stack,
-        url,
-      });
-      showApiError(errorMessage.message);
-      onError?.(errorMessage as Error);
-      // 에러 발생 시에도 onComplete는 호출하지 않음 (에러 상태이므로)
-      throw errorMessage;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error
+            ? error
+            : new Error("알 수 없는 오류가 발생했습니다.");
+        const errWithMeta = errorMessage as Error & {
+          retryable?: boolean;
+          is409?: boolean;
+        };
+        const is409 = errWithMeta.is409 === true;
+        const retryable = errWithMeta.retryable !== false;
+        const canRetry =
+          attempt < MAX_RETRIES - 1 && retryable && !is409;
+
+        console.error("[SSE 스트리밍 오류]", {
+          error: errorMessage,
+          message: errorMessage.message,
+          attempt: attempt + 1,
+          canRetry,
+          is409,
+        });
+
+        if (!canRetry) {
+          showApiError(errorMessage.message);
+          onError?.(errorMessage as Error);
+          throw errorMessage;
+        }
+        // canRetry면 다음 attempt로 진행 (onError 호출하지 않음)
+      }
     }
+
+    const finalError = new Error(
+      "요청이 실패했으며 재시도 횟수를 초과했습니다.",
+    );
+    showApiError(finalError.message);
+    onError?.(finalError);
+    throw finalError;
   };
 
   return {
