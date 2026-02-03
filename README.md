@@ -7,7 +7,7 @@
 ![Vite](https://img.shields.io/badge/Vite-7.2-646CFF?logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.1-06B6D4?logo=tailwindcss&logoColor=white)
 
-<!-- 
+<!--
 📸 스크린샷 추가 예정
 ![메인 화면](./docs/images/main-screenshot.png)
 -->
@@ -38,18 +38,19 @@ Vue.js 기본 지식을 바탕으로, 실제 서비스 수준의 프로젝트를
 
 ### 해결하려는 문제
 
-| 문제 | 해결 방안 |
-|------|----------|
-| 기존 REST API의 긴 응답 대기 시간 | SSE(Server-Sent Events) 스트리밍으로 실시간 응답 |
-| 스트리밍 데이터의 복잡한 파싱 | 상태 머신 기반 JSON 파싱 로직 구현 |
-| 대화 히스토리 관리 | 무한 스크롤 페이지네이션 |
-| 백엔드와 프론트엔드 간 데이터 포맷 불일치 | 유연한 타임스탬프 파싱 및 변환 로직 |
+| 문제                                      | 해결 방안                                        |
+| ----------------------------------------- | ------------------------------------------------ |
+| 기존 REST API의 긴 응답 대기 시간         | SSE(Server-Sent Events) 스트리밍으로 실시간 응답 |
+| 스트리밍 데이터의 복잡한 파싱             | 상태 머신 기반 JSON 파싱 로직 구현               |
+| 대화 히스토리 관리                        | 무한 스크롤 페이지네이션                         |
+| 백엔드와 프론트엔드 간 데이터 포맷 불일치 | 유연한 타임스탬프 파싱 및 변환 로직              |
 
 ---
 
 ## 주요 기능
 
 ### 채팅 기능
+
 - **실시간 스트리밍 응답**: AI 응답을 실시간으로 화면에 표시
 - **대화 관리**: 대화방 생성, 제목 변경, 삭제
 - **무한 스크롤**: 과거 대화 히스토리 페이지네이션
@@ -57,15 +58,17 @@ Vue.js 기본 지식을 바탕으로, 실제 서비스 수준의 프로젝트를
 - **마크다운 렌더링**: AI 응답의 마크다운 포맷 지원
 
 ### UI/UX
+
 - **반응형 디자인**: 모바일, 태블릿, 데스크톱 지원
 - **다크/라이트 테마**: 시스템 설정 연동 및 수동 전환
 - **개인 맞춤 설정**: 닉네임, 직업 등 사용자 정보 관리
 
 ### 대시보드
+
 - **사용량 통계**: 차트를 통한 사용량 시각화
 - **시스템 상태**: 서비스 상태 모니터링
 
-<!-- 
+<!--
 📸 기능별 스크린샷 추가 예정
 | 채팅 화면 | 대시보드 | 모바일 뷰 |
 |:---:|:---:|:---:|
@@ -78,24 +81,24 @@ Vue.js 기본 지식을 바탕으로, 실제 서비스 수준의 프로젝트를
 
 ### Frontend
 
-| 구분 | 기술 | 선택 이유 |
-|------|------|----------|
-| 프레임워크 | Vue 3 (Composition API) | 러닝커브가 낮고, 공식 문서가 잘 정리되어 있음 |
-| 언어 | TypeScript 5.9 | 타입 안정성 확보, 백엔드 DTO와 일관성 유지 |
-| 빌드 도구 | Vite 7.2 | 빠른 HMR, 개발 생산성 향상 |
-| 스타일링 | Tailwind CSS 4.1 | 유틸리티 퍼스트로 빠른 UI 구현 |
-| UI 컴포넌트 | Reka UI (shadcn-vue) | 접근성을 고려한 headless 컴포넌트 |
-| 마크다운 | markdown-it | AI 응답 마크다운 렌더링 |
-| 차트 | @unovis/vue | 대시보드 데이터 시각화 |
+| 구분        | 기술                    | 선택 이유                                     |
+| ----------- | ----------------------- | --------------------------------------------- |
+| 프레임워크  | Vue 3 (Composition API) | 러닝커브가 낮고, 공식 문서가 잘 정리되어 있음 |
+| 언어        | TypeScript 5.9          | 타입 안정성 확보, 백엔드 DTO와 일관성 유지    |
+| 빌드 도구   | Vite 7.2                | 빠른 HMR, 개발 생산성 향상                    |
+| 스타일링    | Tailwind CSS 4.1        | 유틸리티 퍼스트로 빠른 UI 구현                |
+| UI 컴포넌트 | Reka UI (shadcn-vue)    | 접근성을 고려한 headless 컴포넌트             |
+| 마크다운    | markdown-it             | AI 응답 마크다운 렌더링                       |
+| 차트        | @unovis/vue             | 대시보드 데이터 시각화                        |
 
 ### Backend (별도 저장소)
 
-| 구분 | 기술 |
-|------|------|
-| 프레임워크 | Spring Boot 3.x |
-| AI 연동 | OpenAI API (GPT-4) |
-| 스트리밍 | SSE (Server-Sent Events) |
-| 데이터베이스 | PostgreSQL |
+| 구분         | 기술                     |
+| ------------ | ------------------------ |
+| 프레임워크   | Spring Boot 3.x          |
+| AI 연동      | OpenAI API (GPT-4)       |
+| 스트리밍     | SSE (Server-Sent Events) |
+| 데이터베이스 | PostgreSQL               |
 
 ---
 
@@ -162,6 +165,7 @@ src/
 ```
 
 **설계 원칙**
+
 - 컴포넌트는 UI 렌더링에 집중, 비즈니스 로직은 composables로 분리
 - API 호출은 컴포넌트에서 직접 하지 않고 useApi를 통해 처리
 - 타입 정의는 백엔드 DTO와 일관성 유지
@@ -175,6 +179,7 @@ src/
 백엔드에서 SSE로 전송되는 AI 응답을 실시간으로 파싱하여 화면에 표시합니다.
 
 **구현 포인트**
+
 - 청크 단위로 도착하는 스트림 데이터를 버퍼에 누적
 - 중괄호 카운팅으로 완전한 JSON 객체만 추출
 - 문자열 내부의 중괄호는 이스케이프 처리로 구분
@@ -183,8 +188,8 @@ src/
 ```typescript
 // src/lib/chatCompletionParser.ts
 export function extractCompleteJsonFromBuffer(buffer: string): {
-  contents: string[]
-  remainingBuffer: string
+  contents: string[];
+  remainingBuffer: string;
 } {
   // 중괄호 카운팅과 이스케이프 처리로 완전한 JSON 추출
   // 불완전한 JSON은 버퍼에 보관
@@ -198,6 +203,7 @@ export function extractCompleteJsonFromBuffer(buffer: string): {
 백엔드와의 통신을 담당하는 `useApi` composable을 통해 모든 API 호출을 일원화했습니다.
 
 **구현 포인트**
+
 - REST API (GET, POST, PATCH, DELETE) 지원
 - SSE 스트리밍 연결 및 이벤트 처리
 - 파일 업로드 (multipart/form-data)
@@ -207,25 +213,25 @@ export function extractCompleteJsonFromBuffer(buffer: string): {
 // src/composables/useApi.ts
 const sendChatMessage = async (
   request: AssistantRequest,
-  onMessage: (data: string) => void,  // 스트림 데이터 콜백
-  onError?: (error: Error) => void,   // 에러 콜백
-  onComplete?: () => void,            // 완료 콜백
-  file?: File                         // 첨부 파일
+  onMessage: (data: string) => void, // 스트림 데이터 콜백
+  onError?: (error: Error) => void, // 에러 콜백
+  onComplete?: () => void, // 완료 콜백
+  file?: File // 첨부 파일
 ): Promise<void> => {
   // SSE 연결 및 스트리밍 처리
-}
+};
 ```
 
 ### 3. 상태 관리 (관심사 분리)
 
 채팅 상태 관리를 `useChatState` composable로 분리하여 컴포넌트의 역할을 명확히 했습니다.
 
-| 관심사 | 담당 | 설명 |
-|-------|------|------|
-| UI 렌더링 | ChatPage.vue | 화면 표시 및 사용자 입력 |
+| 관심사    | 담당         | 설명                         |
+| --------- | ------------ | ---------------------------- |
+| UI 렌더링 | ChatPage.vue | 화면 표시 및 사용자 입력     |
 | 채팅 상태 | useChatState | 메시지, 스레드, 페이지네이션 |
-| API 통신 | useApi | HTTP 요청, SSE 스트리밍 |
-| 에러 처리 | useApiError | 토스트 알림 |
+| API 통신  | useApi       | HTTP 요청, SSE 스트리밍      |
+| 에러 처리 | useApiError  | 토스트 알림                  |
 
 ---
 
@@ -234,15 +240,18 @@ const sendChatMessage = async (
 ### 사례 1: SSE 스트림에서 불완전한 JSON 파싱
 
 **문제 상황**
+
 - 백엔드에서 `{"id":"1","content":"안녕"}{"id":"2","content":"하세요"}`처럼 연속된 JSON이 도착
 - 또는 `{"id":"1","content":"안녕하세`처럼 JSON이 중간에 끊김
 - `JSON.parse()`를 바로 호출하면 파싱 에러 발생
 
 **원인 분석**
+
 - SSE는 텍스트 스트림이므로 JSON 경계가 명확하지 않음
 - 네트워크 버퍼링으로 청크 크기가 일정하지 않음
 
 **해결 방법**
+
 1. 버퍼에 청크를 누적
 2. 중괄호 카운팅으로 완전한 JSON 객체 경계 파악
 3. 문자열 내부의 중괄호는 이스케이프(`\`) 처리로 구분
@@ -251,15 +260,18 @@ const sendChatMessage = async (
 ### 사례 2: 백엔드 타임스탬프 형식 불일치
 
 **문제 상황**
+
 - 백엔드가 한국 시간(KST)을 ISO 형식으로 보내되 끝에 `Z`만 붙임
 - 예: `2026-01-26T20:38:33Z` (실제로는 KST, UTC 아님)
 - `new Date()`로 파싱 시 UTC로 해석되어 9시간 차이 발생
 
 **원인 분석**
+
 - 백엔드에서 `Instant` 직렬화 시 타임존 정보 손실
 - ISO 8601 표준에서 `Z`는 UTC를 의미하지만, 실제 데이터는 KST
 
 **해결 방법**
+
 1. ISO 문자열에서 `Z` 제거 후 로컬 시간대로 파싱
 2. Epoch 밀리초/초 숫자 형식도 지원
 3. 브라우저 로케일 기반 포맷팅
@@ -267,7 +279,7 @@ const sendChatMessage = async (
 ```typescript
 // Z 제거 후 로컬 시간대로 파싱
 if (isoWithZ) {
-  date = new Date(raw.slice(0, -1)) // Z 제거
+  date = new Date(raw.slice(0, -1)); // Z 제거
 }
 ```
 
@@ -288,12 +300,12 @@ if (isoWithZ) {
 
 백엔드 개발자로서 프론트엔드를 직접 구현하면서 얻은 인사이트:
 
-| 관점 | 배운 점 |
-|------|---------|
-| API 설계 | 프론트엔드 입장에서 사용하기 편한 응답 형식의 중요성 |
-| 에러 처리 | 사용자 친화적인 에러 메시지와 상태 코드 설계 |
-| 타임존 처리 | 백엔드-프론트엔드 간 일관된 타임존 관리의 중요성 |
-| 스트리밍 | SSE 이벤트 설계 시 프론트엔드 파싱 고려 필요 |
+| 관점        | 배운 점                                              |
+| ----------- | ---------------------------------------------------- |
+| API 설계    | 프론트엔드 입장에서 사용하기 편한 응답 형식의 중요성 |
+| 에러 처리   | 사용자 친화적인 에러 메시지와 상태 코드 설계         |
+| 타임존 처리 | 백엔드-프론트엔드 간 일관된 타임존 관리의 중요성     |
+| 스트리밍    | SSE 이벤트 설계 시 프론트엔드 파싱 고려 필요         |
 
 ### 추가 학습 목표
 
@@ -308,7 +320,7 @@ if (isoWithZ) {
 
 ### 사전 요구사항
 
-- Node.js 18+ 
+- Node.js 18+
 - 백엔드 API 서버 실행 (localhost:8080)
 
 ### 개발 환경
@@ -374,7 +386,7 @@ VITE_USER_ID=user@example.com            # 개발용 사용자 ID
 
 ---
 
-<!-- 
+<!--
 📝 추가 예정 섹션:
 - 데모 영상/GIF
 - API 연동 시퀀스 다이어그램

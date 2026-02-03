@@ -33,6 +33,19 @@ const getUserId = (): string => {
   return import.meta.env.VITE_USER_ID ?? "kade@thekade.com";
 };
 
+/**
+ * 브라우저 타임존 식별자 (IANA, 예: Asia/Seoul).
+ * SSR 등에서 undefined일 수 있으므로 빈 문자열 대체.
+ */
+const getBrowserTimezone = (): string => {
+  if (typeof Intl === "undefined" || !Intl.DateTimeFormat) return "";
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    return "";
+  }
+};
+
 /** role 문자열을 ChatRole로 매핑 (system/tool은 assistant로 표시). 대소문자 무시(USER→user). */
 const toChatRole = (role: string): ChatRole =>
   String(role).toLowerCase() === "user" ? "user" : "assistant";
@@ -44,7 +57,7 @@ const toChatRole = (role: string): ChatRole =>
  * - epoch ms/초 숫자도 지원.
  */
 function formatTimestamp(
-  timestamp: string | number | null | undefined,
+  timestamp: string | number | null | undefined
 ): string {
   if (timestamp === null || timestamp === undefined || timestamp === "")
     return "";
@@ -61,13 +74,13 @@ function formatTimestamp(
     date = new Date(ms);
   } else {
     const isoWithZ = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z$/i.test(
-      raw,
+      raw
     );
     if (isoWithZ) {
       date = new Date(raw.slice(0, -1));
     } else {
       const isoNoTz = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/i.test(
-        raw,
+        raw
       );
       date = new Date(isoNoTz ? `${raw}Z` : raw);
     }
@@ -98,7 +111,7 @@ export const useApi = () => {
    */
   const login = async (
     emailId: string,
-    password: string,
+    password: string
   ): Promise<{ userId: string; emailId: string; plan: string }> => {
     const url = `${API_BASE_URL}/api/v1/auth/login`;
     try {
@@ -113,7 +126,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "로그인에 실패했습니다.",
+          "로그인에 실패했습니다."
         );
         throw new Error(message);
       }
@@ -165,7 +178,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "개인 맞춤 설정을 불러오는데 실패했습니다.",
+          "개인 맞춤 설정을 불러오는데 실패했습니다."
         );
         throw new Error(message);
       }
@@ -188,7 +201,7 @@ export const useApi = () => {
    * POST /api/v1/ai/pref, USER-ID 헤더, body: PreferenceRequest.
    */
   const updatePreference = async (
-    request: PreferenceRequest,
+    request: PreferenceRequest
   ): Promise<PreferenceResponse> => {
     const url = `${API_BASE_URL}/api/v1/ai/pref`;
     try {
@@ -204,7 +217,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "개인 맞춤 설정 저장에 실패했습니다.",
+          "개인 맞춤 설정 저장에 실패했습니다."
         );
         throw new Error(message);
       }
@@ -219,6 +232,46 @@ export const useApi = () => {
           : "개인 맞춤 설정 저장에 실패했습니다.";
       showApiError(msg);
       console.error("개인 맞춤 설정 저장 실패:", error);
+      throw error instanceof Error ? error : new Error(msg);
+    }
+  };
+
+  /**
+   * AI 통계를 조회합니다. 대시보드 Observation 데이터도 이 엔드포인트로 조회합니다.
+   * GET /api/v1/ai/stat, USER-ID, X-USER-TIMEZONE 헤더 필요.
+   */
+  const getAiStat = async (): Promise<unknown> => {
+    const url = `${API_BASE_URL}/api/v1/ai/stat`;
+    const timezone = getBrowserTimezone();
+    const headers: Record<string, string> = {
+      "USER-ID": getUserId(),
+    };
+    if (timezone) {
+      headers["X-USER-TIMEZONE"] = timezone;
+    }
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "AI 통계를 불러오는데 실패했습니다."
+        );
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as unknown;
+      return data;
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "AI 통계를 불러오는데 실패했습니다.";
+      showApiError(msg);
+      console.error("AI 통계 조회 실패:", error);
       throw error instanceof Error ? error : new Error(msg);
     }
   };
@@ -241,7 +294,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "채팅방 목록을 불러오는데 실패했습니다.",
+          "채팅방 목록을 불러오는데 실패했습니다."
         );
         throw new Error(message);
       }
@@ -287,7 +340,7 @@ export const useApi = () => {
 
       const message = await parseApiErrorFromResponse(
         response,
-        "대화를 삭제하는 데 실패했습니다.",
+        "대화를 삭제하는 데 실패했습니다."
       );
       showApiError(message);
       errorAlreadyShown = true;
@@ -314,7 +367,7 @@ export const useApi = () => {
    */
   const patchConversationSubject = async (
     conversationId: string,
-    subject: string,
+    subject: string
   ): Promise<void> => {
     const url = `${API_BASE_URL}/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
     let errorAlreadyShown = false;
@@ -335,7 +388,7 @@ export const useApi = () => {
 
       const message = await parseApiErrorFromResponse(
         response,
-        "제목 변경에 실패했습니다.",
+        "제목 변경에 실패했습니다."
       );
       showApiError(message);
       errorAlreadyShown = true;
@@ -362,7 +415,7 @@ export const useApi = () => {
    */
   const fetchConversation = async (
     conversationId: string,
-    beforeTimestamp?: string | number,
+    beforeTimestamp?: string | number
   ): Promise<ChatMessage[]> => {
     // API_BASE_URL이 빈 문자열이면 상대 경로 사용 (프록시 환경)
     const basePath = `/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
@@ -396,7 +449,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "대화 내용을 불러오는데 실패했습니다.",
+          "대화 내용을 불러오는데 실패했습니다."
         );
         throw new Error(message);
       }
@@ -431,7 +484,7 @@ export const useApi = () => {
    * 형식: event: conversation_created\ndata: {"conversationId":"...","subject":"..."}
    */
   const consumeConversationCreatedEvent = (
-    buffer: string,
+    buffer: string
   ): { item: UserConversationItemDto | null; remainingBuffer: string } => {
     const segments = buffer.split(/\n\n/);
     const last = segments.pop() ?? "";
@@ -440,7 +493,7 @@ export const useApi = () => {
 
     for (const seg of segments) {
       const match = seg.match(
-        /event:\s*conversation_created\s*\ndata:\s*([\s\S]*)/i,
+        /event:\s*conversation_created\s*\ndata:\s*([\s\S]*)/i
       );
       const dataPart = match?.[1];
       if (dataPart !== undefined) {
@@ -475,7 +528,7 @@ export const useApi = () => {
    * @returns { found: 이벤트 발견 여부, remainingBuffer: 남은 버퍼 }
    */
   const consumeStreamCompleteEvent = (
-    buffer: string,
+    buffer: string
   ): { found: boolean; remainingBuffer: string } => {
     const segments = buffer.split(/\n\n/);
     const last = segments.pop() ?? "";
@@ -510,7 +563,7 @@ export const useApi = () => {
    * data는 JSON 문자열 (code, message, retryable).
    */
   const consumeErrorEvent = (
-    buffer: string,
+    buffer: string
   ): {
     found: boolean;
     code?: string;
@@ -569,7 +622,7 @@ export const useApi = () => {
    * data: { "conversationId": "..." }
    */
   const consumeAlreadyCompletedEvent = (
-    buffer: string,
+    buffer: string
   ): { found: boolean; conversationId?: string; remainingBuffer: string } => {
     const segments = buffer.split(/\n\n/);
     const last = segments.pop() ?? "";
@@ -579,7 +632,7 @@ export const useApi = () => {
 
     for (const seg of segments) {
       const match = seg.match(
-        /event:\s*already_completed\s*\ndata:\s*([\s\S]*)/i,
+        /event:\s*already_completed\s*\ndata:\s*([\s\S]*)/i
       );
       const dataPart = match?.[1];
       if (dataPart !== undefined) {
@@ -627,7 +680,7 @@ export const useApi = () => {
     onConversationCreated?: (item: UserConversationItemDto) => void,
     onAlreadyCompleted?: (conversationId: string) => void,
     file?: File,
-    idempotencyKey?: string,
+    idempotencyKey?: string
   ): Promise<void> => {
     const url = `${API_BASE_URL}/api/v1/ai/conv`;
 
@@ -651,87 +704,166 @@ export const useApi = () => {
         };
 
         if (file) {
-        // 파일이 있는 경우: multipart/form-data로 전송
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("request", JSON.stringify(request));
+          // 파일이 있는 경우: multipart/form-data로 전송
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("request", JSON.stringify(request));
 
-        requestBody = formData;
-        // multipart/form-data의 경우 브라우저가 자동으로 Content-Type과 boundary를 설정하므로 명시하지 않음
-        headers = commonHeaders;
-      } else {
-        // 파일이 없는 경우: application/json으로 전송
-        requestBody = JSON.stringify(request);
-        headers = {
-          ...commonHeaders,
-          "Content-Type": "application/json",
-        };
-      }
+          requestBody = formData;
+          // multipart/form-data의 경우 브라우저가 자동으로 Content-Type과 boundary를 설정하므로 명시하지 않음
+          headers = commonHeaders;
+        } else {
+          // 파일이 없는 경우: application/json으로 전송
+          requestBody = JSON.stringify(request);
+          headers = {
+            ...commonHeaders,
+            "Content-Type": "application/json",
+          };
+        }
 
-      const response = await fetch(url, {
-        method: "POST",
-        headers,
-        body: requestBody,
-      });
+        const response = await fetch(url, {
+          method: "POST",
+          headers,
+          body: requestBody,
+        });
 
-      console.log("[SSE 응답 받음]", {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-      });
+        console.log("[SSE 응답 받음]", {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+        });
 
-      if (response.status === 409) {
-        const message = await parseApiErrorFromResponse(
-          response,
-          "동일한 Idempotency-Key로 요청이 이미 처리 중입니다.",
-        );
-        const conflictError = new Error(message) as Error & { is409?: boolean };
-        conflictError.is409 = true;
-        throw conflictError;
-      }
+        if (response.status === 409) {
+          const message = await parseApiErrorFromResponse(
+            response,
+            "동일한 Idempotency-Key로 요청이 이미 처리 중입니다."
+          );
+          const conflictError = new Error(message) as Error & {
+            is409?: boolean;
+          };
+          conflictError.is409 = true;
+          throw conflictError;
+        }
 
-      if (!response.ok) {
-        const message = await parseApiErrorFromResponse(
-          response,
-          `요청 처리에 실패했습니다. (${response.status})`,
-        );
-        const err = new Error(message) as Error & { retryable?: boolean };
-        err.retryable = response.status >= 500;
-        throw err;
-      }
+        if (!response.ok) {
+          const message = await parseApiErrorFromResponse(
+            response,
+            `요청 처리에 실패했습니다. (${response.status})`
+          );
+          const err = new Error(message) as Error & { retryable?: boolean };
+          err.retryable = response.status >= 500;
+          throw err;
+        }
 
-      if (!response.body) {
-        throw new Error("Response body is null");
-      }
+        if (!response.body) {
+          throw new Error("Response body is null");
+        }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let connectedProcessed = false;
-      let streamCompleted = false;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let connectedProcessed = false;
+        let streamCompleted = false;
 
-      while (true) {
-        const { done, value } = await reader.read();
+        while (true) {
+          const { done, value } = await reader.read();
 
-        if (done) {
-          console.log("[SSE 스트림 완료] done=true, 버퍼 처리 시작", {
-            bufferLength: buffer.length,
-            hasOnComplete: !!onComplete,
-            streamCompleted,
-          });
-          // 마지막 버퍼에서 stream_complete 처리
+          if (done) {
+            console.log("[SSE 스트림 완료] done=true, 버퍼 처리 시작", {
+              bufferLength: buffer.length,
+              hasOnComplete: !!onComplete,
+              streamCompleted,
+            });
+            // 마지막 버퍼에서 stream_complete 처리
+            if (!streamCompleted && onComplete) {
+              const streamCompleteParsed = consumeStreamCompleteEvent(buffer);
+              if (streamCompleteParsed.found) {
+                streamCompleted = true;
+                buffer = streamCompleteParsed.remainingBuffer;
+                console.log(
+                  "[SSE 스트림 완료] stream_complete 이벤트 발견, onComplete 호출"
+                );
+                onComplete();
+              }
+            }
+            // 마지막 버퍼에서 conversation_created 처리
+            if (onConversationCreated) {
+              let parsed = consumeConversationCreatedEvent(buffer);
+              while (parsed.item) {
+                onConversationCreated(parsed.item);
+                parsed = consumeConversationCreatedEvent(
+                  parsed.remainingBuffer
+                );
+              }
+              buffer = parsed.remainingBuffer;
+            }
+            // 마지막 버퍼에 남은 콘텐츠 처리
+            if (buffer.trim()) {
+              const { contents } = extractCompleteJsonFromBuffer(buffer);
+              contents.forEach((content) => {
+                if (content) {
+                  onMessage(content);
+                }
+              });
+            }
+            // stream_complete 전에 연결이 끊기면 실패로 간주하고 재시도 대상
+            if (!streamCompleted) {
+              console.warn(
+                "[SSE 스트림] stream_complete 없이 연결 종료, 재시도 대상"
+              );
+              const dropErr = new Error(
+                "스트림이 완료되지 않고 연결이 끊겼습니다."
+              ) as Error & { retryable?: boolean };
+              dropErr.retryable = true;
+              throw dropErr;
+            }
+            break;
+          }
+
+          // 청크를 텍스트로 디코딩
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE "event: already_completed" (같은 Idempotency-Key로 이미 완료된 요청)
+          if (onAlreadyCompleted) {
+            const ac = consumeAlreadyCompletedEvent(buffer);
+            if (ac.found && ac.conversationId) {
+              console.log("[SSE] already_completed 수신", ac.conversationId);
+              onAlreadyCompleted(ac.conversationId);
+              return;
+            }
+          }
+
+          // SSE "event: error" (구조화된 에러, data는 JSON 문자열)
+          const errParsed = consumeErrorEvent(buffer);
+          if (errParsed.found) {
+            const msg =
+              errParsed.message ?? "AI 응답 생성 중 오류가 발생했습니다.";
+            const streamErr = new Error(msg) as Error & { retryable?: boolean };
+            streamErr.retryable = errParsed.retryable;
+            console.error("[SSE] error 이벤트 수신", {
+              code: errParsed.code,
+              message: msg,
+              retryable: errParsed.retryable,
+            });
+            showApiError(msg);
+            onError?.(streamErr);
+            throw streamErr;
+          }
+
+          // SSE "event: stream_complete" 파싱 (스트림 완료 시 서버 전송)
           if (!streamCompleted && onComplete) {
             const streamCompleteParsed = consumeStreamCompleteEvent(buffer);
             if (streamCompleteParsed.found) {
               streamCompleted = true;
               buffer = streamCompleteParsed.remainingBuffer;
               console.log(
-                "[SSE 스트림 완료] stream_complete 이벤트 발견, onComplete 호출",
+                "[SSE 스트림] stream_complete 이벤트 수신, onComplete 호출"
               );
               onComplete();
             }
           }
-          // 마지막 버퍼에서 conversation_created 처리
+
+          // SSE "event: conversation_created" + "data: {...}" 파싱 (대화방 생성 시 서버 전송)
           if (onConversationCreated) {
             let parsed = consumeConversationCreatedEvent(buffer);
             while (parsed.item) {
@@ -740,105 +872,30 @@ export const useApi = () => {
             }
             buffer = parsed.remainingBuffer;
           }
-          // 마지막 버퍼에 남은 콘텐츠 처리
-          if (buffer.trim()) {
-            const { contents } = extractCompleteJsonFromBuffer(buffer);
-            contents.forEach((content) => {
-              if (content) {
-                onMessage(content);
-              }
-            });
-          }
-          // stream_complete 전에 연결이 끊기면 실패로 간주하고 재시도 대상
-          if (!streamCompleted) {
-            console.warn(
-              "[SSE 스트림] stream_complete 없이 연결 종료, 재시도 대상",
-            );
-            const dropErr = new Error(
-              "스트림이 완료되지 않고 연결이 끊겼습니다.",
-            ) as Error & { retryable?: boolean };
-            dropErr.retryable = true;
-            throw dropErr;
-          }
-          break;
-        }
 
-        // 청크를 텍스트로 디코딩
-        buffer += decoder.decode(value, { stream: true });
-
-        // SSE "event: already_completed" (같은 Idempotency-Key로 이미 완료된 요청)
-        if (onAlreadyCompleted) {
-          const ac = consumeAlreadyCompletedEvent(buffer);
-          if (ac.found && ac.conversationId) {
-            console.log("[SSE] already_completed 수신", ac.conversationId);
-            onAlreadyCompleted(ac.conversationId);
-            return;
+          // "connected" 문자열 처리 (최초 1회만)
+          if (
+            !connectedProcessed &&
+            buffer.toLowerCase().startsWith("connected")
+          ) {
+            buffer = buffer.substring("connected".length);
+            connectedProcessed = true;
           }
-        }
 
-        // SSE "event: error" (구조화된 에러, data는 JSON 문자열)
-        const errParsed = consumeErrorEvent(buffer);
-        if (errParsed.found) {
-          const msg =
-            errParsed.message ?? "AI 응답 생성 중 오류가 발생했습니다.";
-          const streamErr = new Error(msg) as Error & { retryable?: boolean };
-          streamErr.retryable = errParsed.retryable;
-          console.error("[SSE] error 이벤트 수신", {
-            code: errParsed.code,
-            message: msg,
-            retryable: errParsed.retryable,
+          // 완전한 JSON 객체들을 추출 및 파싱
+          const { contents, remainingBuffer } =
+            extractCompleteJsonFromBuffer(buffer);
+
+          // 파싱된 내용들을 onMessage로 전달
+          contents.forEach((content) => {
+            if (content) {
+              onMessage(content);
+            }
           });
-          showApiError(msg);
-          onError?.(streamErr);
-          throw streamErr;
+
+          // 버퍼 업데이트 (불완전한 JSON은 남김)
+          buffer = remainingBuffer;
         }
-
-        // SSE "event: stream_complete" 파싱 (스트림 완료 시 서버 전송)
-        if (!streamCompleted && onComplete) {
-          const streamCompleteParsed = consumeStreamCompleteEvent(buffer);
-          if (streamCompleteParsed.found) {
-            streamCompleted = true;
-            buffer = streamCompleteParsed.remainingBuffer;
-            console.log(
-              "[SSE 스트림] stream_complete 이벤트 수신, onComplete 호출",
-            );
-            onComplete();
-          }
-        }
-
-        // SSE "event: conversation_created" + "data: {...}" 파싱 (대화방 생성 시 서버 전송)
-        if (onConversationCreated) {
-          let parsed = consumeConversationCreatedEvent(buffer);
-          while (parsed.item) {
-            onConversationCreated(parsed.item);
-            parsed = consumeConversationCreatedEvent(parsed.remainingBuffer);
-          }
-          buffer = parsed.remainingBuffer;
-        }
-
-        // "connected" 문자열 처리 (최초 1회만)
-        if (
-          !connectedProcessed &&
-          buffer.toLowerCase().startsWith("connected")
-        ) {
-          buffer = buffer.substring("connected".length);
-          connectedProcessed = true;
-        }
-
-        // 완전한 JSON 객체들을 추출 및 파싱
-        const { contents, remainingBuffer } =
-          extractCompleteJsonFromBuffer(buffer);
-
-        // 파싱된 내용들을 onMessage로 전달
-        contents.forEach((content) => {
-          if (content) {
-            onMessage(content);
-          }
-        });
-
-        // 버퍼 업데이트 (불완전한 JSON은 남김)
-        buffer = remainingBuffer;
-      }
       } catch (error) {
         const errorMessage =
           error instanceof Error
@@ -850,8 +907,7 @@ export const useApi = () => {
         };
         const is409 = errWithMeta.is409 === true;
         const retryable = errWithMeta.retryable !== false;
-        const canRetry =
-          attempt < MAX_RETRIES - 1 && retryable && !is409;
+        const canRetry = attempt < MAX_RETRIES - 1 && retryable && !is409;
 
         console.error("[SSE 스트리밍 오류]", {
           error: errorMessage,
@@ -871,7 +927,7 @@ export const useApi = () => {
     }
 
     const finalError = new Error(
-      "요청이 실패했으며 재시도 횟수를 초과했습니다.",
+      "요청이 실패했으며 재시도 횟수를 초과했습니다."
     );
     showApiError(finalError.message);
     onError?.(finalError);
@@ -882,6 +938,7 @@ export const useApi = () => {
     login,
     getPreference,
     updatePreference,
+    getAiStat,
     fetchChatThreads,
     fetchConversation,
     sendChatMessage,

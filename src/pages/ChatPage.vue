@@ -20,7 +20,7 @@ const { isSidebarOpen, isMobile } = useSidebarState();
 const auth =
   inject<ReturnType<typeof import("@/composables/useAuth").useAuth>>("auth")!;
 const { logout, userPlan } = auth;
-const { getPreference, updatePreference } = useApi();
+const { getPreference, updatePreference, getAiStat } = useApi();
 const {
   canSend,
   messageInput,
@@ -114,11 +114,11 @@ const handleCustomizeConfirm = async () => {
 // 공통 뷰 변경 핸들러
 const handleViewChange = (
   view: "chat" | "dashboard" | "pricing",
-  conversationId?: string,
+  conversationId?: string
 ) => {
   console.log(
     `뷰 변경: ${currentView.value} → ${view}`,
-    conversationId ? `(대화: ${conversationId})` : "",
+    conversationId ? `(대화: ${conversationId})` : ""
   );
 
   // 대화 선택인 경우 selectThread 호출
@@ -149,7 +149,12 @@ const handleViewChange = (
   }
 };
 
-const handleDashboard = () => handleViewChange("dashboard");
+const handleDashboard = () => {
+  getAiStat().catch(() => {
+    /* 에러는 useApi에서 토스트로 표시됨 */
+  });
+  handleViewChange("dashboard");
+};
 const handleSelectThread = (conversationId: string) =>
   handleViewChange("chat", conversationId);
 const handleNewChat = () => handleViewChange("chat");

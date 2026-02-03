@@ -3,6 +3,7 @@ import { computed, onMounted, provide } from "vue";
 import ApiErrorToast from "@/components/ApiErrorToast.vue";
 import ChatPage from "@/pages/ChatPage.vue";
 import LoginPage from "@/pages/LoginPage.vue";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/composables/useAuth";
 
 const auth = useAuth();
@@ -19,9 +20,11 @@ const showLogin = computed(() => !auth.isAuthenticated.value);
 </script>
 
 <template>
-  <LoginPage v-if="showLogin" :auth="auth" />
-  <template v-else>
-    <ChatPage />
-  </template>
-  <ApiErrorToast />
+  <TooltipProvider>
+    <LoginPage v-if="showLogin" :auth="auth" />
+    <template v-else>
+      <ChatPage />
+    </template>
+    <ApiErrorToast />
+  </TooltipProvider>
 </template>

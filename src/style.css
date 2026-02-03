@@ -57,6 +57,23 @@
   --vis-background-color: oklch(1 0 0);
 }
 
+/* 라인/비용 차트: Unovis 축·그리드를 주·야 공통 색(--vis-grid-color)으로 통일 */
+[data-vis-xy-container] {
+  --vis-axis-grid-color: var(--vis-grid-color);
+  --vis-axis-tick-color: var(--vis-grid-color);
+  --vis-axis-domain-color: var(--vis-grid-color);
+}
+
+/* 라인 차트 그리드 라인 stroke 강제 (Unovis 기본값 덮어쓰기) */
+[data-vis-xy-container] .line-chart-axis-grid line {
+  stroke: var(--vis-grid-color) !important;
+}
+
+/* Y축 세로선(domain) 색 통일 */
+[data-vis-xy-container] .domain {
+  stroke: var(--vis-grid-color) !important;
+}
+
 a {
   font-weight: 500;
   color: #646cff;
