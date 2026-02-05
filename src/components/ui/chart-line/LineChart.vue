@@ -53,6 +53,11 @@ const props = withDefaults(
        * 툴팁 상단 날짜/라벨 포맷터 (미설정 시 기본 "날짜: {index값}" 사용)
        */
       tooltipLabelFormatter?: (value: unknown) => string;
+      /**
+       * X축 그리드 라인 표시 (Y축은 showGridLine으로 제어)
+       * @default false
+       */
+      showXGridLine?: boolean;
     }
   >(),
   {
@@ -64,6 +69,7 @@ const props = withDefaults(
     showTooltip: true,
     showLegend: true,
     showGridLine: true,
+    showXGridLine: false,
     showDots: false,
   }
 );
@@ -125,6 +131,14 @@ function _handleLegendItemClick(d: BulletLegendItemInterface, i: number) {
 <template>
   <div
     :class="cn('w-full h-[400px] flex flex-col items-end', $attrs.class ?? '')"
+    :style="{
+      '--vis-tooltip-padding': '0px',
+      '--vis-tooltip-background-color': 'transparent',
+      '--vis-tooltip-border-color': 'transparent',
+      '--vis-tooltip-text-color': 'none',
+      '--vis-tooltip-shadow-color': 'none',
+      '--vis-tooltip-backdrop-filter': 'none',
+    }"
   >
     <!-- <ChartLegend v-if="showLegend" v-model:items="legendItems" @legend-item-click="handleLegendItemClick" /> -->
 
@@ -204,7 +218,7 @@ function _handleLegendItemClick(d: BulletLegendItemInterface, i: number) {
           }
         "
         :num-ticks="xAxisTicks"
-        :grid-line="false"
+        :grid-line="showXGridLine"
         :tick-line="false"
         :domain-line="false"
         tick-text-color="var(--muted-foreground)"

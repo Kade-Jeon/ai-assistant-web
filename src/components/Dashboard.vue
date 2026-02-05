@@ -21,8 +21,11 @@ defineEmits<{
 const {
   aggregates,
   isLoading: isDashboardLoading,
+  isUsageChartRefetching,
+  isCostChartRefetching,
   fetchObservations,
-  getDailyUsageFromMonthStart,
+  getDailyUsageForPeriod,
+  getDailyCostForPeriod,
 } = useDashboardData();
 
 function formatChangePercent(pct: number): string {
@@ -44,9 +47,9 @@ const stats = computed(() => {
       title: "오늘 비용",
       value: a.todayCost,
       change: formatChangePercent(a.todayCostChangePercent),
-      changeType: (a.todayCostChangePercent >= 0
-        ? "positive"
-        : "negative") as const,
+      changeType: (a.todayCostChangePercent >= 0 ? "positive" : "negative") as
+        | "positive"
+        | "negative",
     },
     {
       title: "오늘 사용량",
@@ -54,7 +57,7 @@ const stats = computed(() => {
       change: formatChangePercent(a.todayTokensChangePercent),
       changeType: (a.todayTokensChangePercent >= 0
         ? "positive"
-        : "negative") as const,
+        : "negative") as "positive" | "negative",
     },
     {
       title: "이번 달 비용",
@@ -65,14 +68,14 @@ const stats = computed(() => {
   ];
 });
 
-// 이번 달 일별 비용 차트 (Input/Output, 툴팁 Line Indicator)
+// 기간별(7일/15일) 일별 비용 차트 (Input/Output, 툴팁 Line Indicator)
 const costChartData = computed(() =>
-  aggregates.value.dailyCostThisMonth.map((d) => ({
+  getDailyCostForPeriod(selectedCostPeriod.value).map((d) => ({
     date: d.date,
     input: d.input,
     output: d.output,
     total: d.total,
-  }))
+  })),
 );
 
 const animatedValues = ref<number[]>([]);
@@ -110,7 +113,7 @@ watch(
       }, 300);
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 onUnmounted(() => {
@@ -133,38 +136,56 @@ watch(
       animatedValues.value = [...values];
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 // 모델별 사용 비중 Top 5 + others
 const modelShare = computed(() => aggregates.value.modelUsageShare);
 
-// 일별 사용량: 해당 월 1일~오늘, GENERATION usage 토큰
+// 일별 사용량 / 비용 각각 7일 또는 15일 기간 (독립 선택)
 const periodOptions: Array<{ value: PeriodType; label: string }> = [
-  { value: 7, label: "이번 달" },
+  { value: 7, label: "7일" },
+  { value: 15, label: "15일" },
 ];
-const selectedPeriod = ref<PeriodType>(7);
+const selectedUsagePeriod = ref<PeriodType>(7);
+const selectedCostPeriod = ref<PeriodType>(7);
 
 const chartData = computed(() => {
-  const daily = getDailyUsageFromMonthStart();
+  const daily = getDailyUsageForPeriod(selectedUsagePeriod.value);
   return daily.map((d) => ({
     date: d.date,
-    usage: d.total,
     total: d.total,
     input: d.input,
     output: d.output,
   }));
 });
 
+/** 두 차트 중 더 긴 기간으로 API 조회 (한 번에 조회 후 각 차트가 필요한 만큼만 사용) */
+function getFetchDays(): 7 | 15 {
+  return Math.max(selectedUsagePeriod.value, selectedCostPeriod.value) as 7 | 15;
+}
+
 watch(
   () => props.isVisible,
   (visible) => {
     if (visible) {
-      fetchObservations();
+      fetchObservations(getFetchDays());
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
+
+watch(selectedUsagePeriod, () => {
+  if (props.isVisible) {
+    fetchObservations(getFetchDays(), { chartOnly: "usage" });
+  }
+});
+
+watch(selectedCostPeriod, () => {
+  if (props.isVisible) {
+    fetchObservations(getFetchDays(), { chartOnly: "cost" });
+  }
+});
 </script>
 
 <template>
@@ -192,11 +213,12 @@ watch(
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <!-- 차트 영역: 일별 사용량 (total), 툴팁에 input/output -->
       <ChartSection
-        :selected-period="selectedPeriod"
+        :selected-period="selectedUsagePeriod"
         :period-options="periodOptions"
         :chart-data="chartData"
         :is-loading="isDashboardLoading"
-        @update:selectedPeriod="selectedPeriod = $event"
+        :is-refetching="isUsageChartRefetching"
+        @update:selectedPeriod="selectedUsagePeriod = $event"
       />
 
       <!-- 모델별 사용 비중 Top 5 -->
@@ -206,10 +228,14 @@ watch(
       />
     </div>
 
-    <!-- 이번 달 비용 차트 (Input/Output, Tooltip Line Indicator) -->
+    <!-- 기간별 비용 차트 (7일/15일, Input/Output, Tooltip Line Indicator) -->
     <CostChartSection
+      :selected-period="selectedCostPeriod"
+      :period-options="periodOptions"
       :chart-data="costChartData"
       :is-loading="isDashboardLoading"
+      :is-refetching="isCostChartRefetching"
+      @update:selectedPeriod="selectedCostPeriod = $event"
     />
 
     <!-- 추가 섹션: API 응답 시간 / 시스템 상태 / 빠른 액션 -->

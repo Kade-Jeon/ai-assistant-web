@@ -69,6 +69,23 @@ function getCostFromDetails(
   };
 }
 
+/** usageDetails에서 input, output, total 추출 (오늘 사용량은 usageDetails.total 합산) */
+function getUsageFromDetails(
+  usageDetails: ObservationDto["usageDetails"]
+): { input: number; output: number; total: number } {
+  if (!usageDetails || typeof usageDetails !== "object") {
+    return { input: 0, output: 0, total: 0 };
+  }
+  const input = toNum(usageDetails.input);
+  const output = toNum(usageDetails.output);
+  const total = toNum(usageDetails.total);
+  return {
+    input,
+    output,
+    total: total > 0 ? total : input + output,
+  };
+}
+
 /** GENERATION 한 건의 비용 (costDetails 우선, 없으면 DTO 상단 필드 사용) */
 function getCostFromObservation(obs: ObservationDto): CostDetailNumbers {
   const fromDetails = getCostFromDetails(obs.costDetails);
@@ -149,6 +166,9 @@ export function useDashboardData() {
   const { getAiStat } = useApi();
   const observations = ref<ObservationDto[]>([]);
   const isLoading = ref(false);
+  /** 기간 변경 시 해당 차트만 로딩 (어떤 셀렉트를 바꿨는지에 따라 한쪽만 표시) */
+  const isUsageChartRefetching = ref(false);
+  const isCostChartRefetching = ref(false);
   const error = ref<string | null>(null);
 
   const aggregates = computed<DashboardAggregates>(() => {
@@ -237,8 +257,8 @@ export function useDashboardData() {
       dailyCostThisMonth.push({ date: d, ...cur });
     }
 
-    // 모델별 사용 건수 → 비중 Top 5 + others (GENERATION만 사용, none/빈값은 제외)
-    const countByModel = new Map<string, number>();
+    // 모델별 사용량 비중 Top 5 + others (GENERATION only, usageDetails 기반)
+    const usageByModel = new Map<string, number>();
     const normalizedModelName = (
       raw: string | null | undefined
     ): string | null => {
@@ -249,31 +269,33 @@ export function useDashboardData() {
     for (const o of generations) {
       const model = normalizedModelName(o.model ?? o.modelId);
       if (model == null) continue;
-      countByModel.set(model, (countByModel.get(model) ?? 0) + 1);
+      const usage = getUsageFromDetails(o.usageDetails);
+      const current = usageByModel.get(model) ?? 0;
+      usageByModel.set(model, current + usage.total);
     }
-    const totalCount = Array.from(countByModel.values()).reduce(
+    const totalUsage = Array.from(usageByModel.values()).reduce(
       (a, b) => a + b,
       0
     );
-    const sorted = Array.from(countByModel.entries()).sort(
+    const sorted = Array.from(usageByModel.entries()).sort(
       (a, b) => b[1] - a[1]
     );
     const top = sorted.slice(0, MODEL_TOP_N);
-    const othersCount = totalCount - top.reduce((s, [, c]) => s + c, 0);
+    const othersUsage = totalUsage - top.reduce((s, [, c]) => s + c, 0);
     const modelUsageShare: Array<{ model: string; percent: number }> = top.map(
-      ([name, count]) => ({
+      ([name, usageValue]) => ({
         model: name,
-        percent: totalCount === 0 ? 0 : (count / totalCount) * 100,
+        percent: totalUsage === 0 ? 0 : (usageValue / totalUsage) * 100,
       })
     );
-    if (othersCount > 0) {
+    if (othersUsage > 0) {
       modelUsageShare.push({
         model: "others",
-        percent: (othersCount / totalCount) * 100,
+        percent: totalUsage === 0 ? 0 : (othersUsage / totalUsage) * 100,
       });
     }
 
-    // GENERATION usage(input, output, total) 토큰 사용량 → 날짜별 합산 (일별 사용량 차트용)
+    // GENERATION usageDetails.total 기준 날짜별 합산 (일별 사용량 차트·오늘 사용량)
     const usageByDate = new Map<
       string,
       { input: number; output: number; total: number }
@@ -281,7 +303,7 @@ export function useDashboardData() {
     for (const o of generations) {
       const date = parseObservationDate(o);
       if (!date) continue;
-      const usage = getUsageFromObservation(o);
+      const usage = getUsageFromDetails(o.usageDetails);
       const cur = usageByDate.get(date) ?? { input: 0, output: 0, total: 0 };
       usageByDate.set(date, {
         input: cur.input + usage.input,
@@ -338,18 +360,34 @@ export function useDashboardData() {
     };
   });
 
-  async function fetchObservations() {
-    isLoading.value = true;
+  async function fetchObservations(
+    days?: 7 | 15,
+    options?: { chartOnly?: "usage" | "cost" }
+  ) {
+    const chartOnly = options?.chartOnly;
+    if (chartOnly === "usage") {
+      isUsageChartRefetching.value = true;
+    } else if (chartOnly === "cost") {
+      isCostChartRefetching.value = true;
+    } else {
+      isLoading.value = true;
+    }
     error.value = null;
     try {
-      const data = await getAiStat();
+      const data = await getAiStat(days);
       console.log("[Dashboard] API 응답:", data);
       observations.value = normalizeToObservationList(data);
     } catch (e) {
       error.value = e instanceof Error ? e.message : "데이터 조회 실패";
       observations.value = [];
     } finally {
-      isLoading.value = false;
+      if (chartOnly === "usage") {
+        isUsageChartRefetching.value = false;
+      } else if (chartOnly === "cost") {
+        isCostChartRefetching.value = false;
+      } else {
+        isLoading.value = false;
+      }
     }
   }
 
@@ -370,6 +408,49 @@ export function useDashboardData() {
       const dateStr = `${y}.${m}.${day}`;
       const existing = map.get(dateStr);
       result.push(existing ?? { date: dateStr, total: 0, input: 0, output: 0 });
+    }
+    return result;
+  }
+
+  /**
+   * 지정 기간(일)에 맞춰 일별 비용을 채웁니다.
+   * GENERATION costDetails 기준으로 날짜별 합산 후, 비어 있는 날은 0으로 채웁니다.
+   */
+  function getDailyCostForPeriod(period: PeriodType): DailyCostItem[] {
+    const list = observations.value;
+    const generations = list.filter(
+      (o) => String(o.type).toUpperCase() === "GENERATION"
+    );
+    const costByDate = new Map<
+      string,
+      { input: number; output: number; total: number }
+    >();
+    for (const o of generations) {
+      const dateStr = parseObservationDate(o);
+      if (!dateStr) continue;
+      const c = getCostFromObservation(o);
+      const cur = costByDate.get(dateStr) ?? {
+        input: 0,
+        output: 0,
+        total: 0,
+      };
+      costByDate.set(dateStr, {
+        input: cur.input + c.input,
+        output: cur.output + c.output,
+        total: cur.total + c.total,
+      });
+    }
+    const today = new Date();
+    const result: DailyCostItem[] = [];
+    for (let i = period - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const dateStr = `${y}.${m}.${day}`;
+      const cur = costByDate.get(dateStr) ?? { input: 0, output: 0, total: 0 };
+      result.push({ date: dateStr, ...cur });
     }
     return result;
   }
@@ -396,10 +477,13 @@ export function useDashboardData() {
   return {
     observations,
     isLoading,
+    isUsageChartRefetching,
+    isCostChartRefetching,
     error,
     aggregates,
     fetchObservations,
     getDailyUsageForPeriod,
+    getDailyCostForPeriod,
     getDailyUsageFromMonthStart,
   };
 }

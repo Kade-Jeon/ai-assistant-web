@@ -7,12 +7,13 @@ import Dashboard from "@/components/Dashboard.vue";
 import PricingPage from "@/pages/PricingPage.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Lightbulb, X } from "lucide-vue-next";
 import { useApi } from "@/composables/useApi";
 import { useChatState } from "@/composables/useChatState";
 import { useSidebarState } from "@/composables/useSidebarState";
 import { useTheme } from "@/composables/useTheme";
 import { inject } from "vue";
-import { nextTick, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 
 const { isDark, toggleTheme } = useTheme();
 const { isSidebarOpen, isMobile } = useSidebarState();
@@ -33,13 +34,14 @@ const {
   retryMessage,
   startNewChat,
   selectThread,
+  clearThreadSelection,
   deleteThread,
   renameThread,
   loadMoreMessages,
 } = useChatState();
 
-// 현재 뷰 상태 ('chat' | 'dashboard' | 'pricing')
-const currentView = ref<"chat" | "dashboard" | "pricing">("chat");
+// 현재 뷰 상태 ('chat' | 'dashboard' | 'project' | 'pricing')
+const currentView = ref<"chat" | "dashboard" | "project" | "pricing">("chat");
 
 // 제목 변경 플로팅 폼
 const renamingConversationId = ref<string | null>(null);
@@ -98,6 +100,29 @@ const closeCustomizeForm = () => {
   isCustomizeFormOpen.value = false;
 };
 
+// 프로젝트 만들기 플로팅 폼
+const isProjectFormOpen = ref(false);
+const projectName = ref("");
+
+const openProjectForm = () => {
+  isProjectFormOpen.value = true;
+  projectName.value = "";
+};
+
+const closeProjectForm = () => {
+  isProjectFormOpen.value = false;
+  projectName.value = "";
+};
+
+const handleProjectCreate = () => {
+  const name = projectName.value.trim();
+  if (!name) return;
+  // TODO: 프로젝트 생성 API 연동
+  closeProjectForm();
+};
+
+const canCreateProject = computed(() => projectName.value.trim().length > 0);
+
 const handleCustomizeConfirm = async () => {
   try {
     await updatePreference({
@@ -113,12 +138,12 @@ const handleCustomizeConfirm = async () => {
 
 // 공통 뷰 변경 핸들러
 const handleViewChange = (
-  view: "chat" | "dashboard" | "pricing",
-  conversationId?: string
+  view: "chat" | "dashboard" | "project" | "pricing",
+  conversationId?: string,
 ) => {
   console.log(
     `뷰 변경: ${currentView.value} → ${view}`,
-    conversationId ? `(대화: ${conversationId})` : ""
+    conversationId ? `(대화: ${conversationId})` : "",
   );
 
   // 대화 선택인 경우 selectThread 호출
@@ -129,6 +154,11 @@ const handleViewChange = (
   // 새 채팅 시작인 경우 startNewChat 호출 (conversationId가 undefined일 때)
   if (view === "chat" && !conversationId) {
     startNewChat();
+  }
+
+  // 대시보드/프로젝트/프라이싱 등 채팅이 아닌 뷰로 이동 시 최근 대화 선택 하이라이트 해제
+  if (view === "dashboard" || view === "project" || view === "pricing") {
+    clearThreadSelection();
   }
 
   currentView.value = view;
@@ -179,6 +209,7 @@ const handleHelp = (_section?: string) => {
       :user-plan="userPlan"
       @new-chat="handleNewChat"
       @dashboard="handleDashboard"
+      @new-project="openProjectForm"
       @select-thread="handleSelectThread"
       @rename="openRenameForm"
       @delete="deleteThread"
@@ -210,11 +241,6 @@ const handleHelp = (_section?: string) => {
               @retry="retryMessage"
               @load-more="loadMoreMessages"
             />
-            <div
-              id="chat-toast-container"
-              class="absolute inset-0 pointer-events-none flex items-start justify-center pt-20 z-[100]"
-              aria-hidden="true"
-            />
           </div>
           <ChatInput
             v-model="messageInput"
@@ -232,6 +258,14 @@ const handleHelp = (_section?: string) => {
             :is-visible="currentView === 'dashboard'"
             @back-to-chat="currentView = 'chat'"
           />
+        </div>
+
+        <!-- 프로젝트 뷰 -->
+        <div
+          v-show="currentView === 'project'"
+          class="flex-1 overflow-y-auto flex flex-col items-center justify-center text-muted-foreground"
+        >
+          <p class="text-sm">프로젝트 화면 (준비 중)</p>
         </div>
 
         <!-- 가격(플랜 업그레이드) 뷰 -->
@@ -388,6 +422,78 @@ const handleHelp = (_section?: string) => {
                 취소
               </Button>
               <Button size="sm" @click="handleCustomizeConfirm"> 확인 </Button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 프로젝트 만들기 플로팅 폼 -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        leave-active-class="transition duration-150 ease-in"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="isProjectFormOpen"
+          class="fixed inset-0 z-[110] flex items-center justify-center bg-black/20 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="project-form-title"
+          @click.self="closeProjectForm"
+        >
+          <div
+            class="w-full max-w-md rounded-lg border bg-card p-6 shadow-lg"
+            @click.stop
+          >
+            <div class="mb-4 flex items-start justify-between gap-4">
+              <h3
+                id="project-form-title"
+                class="text-lg font-semibold text-foreground"
+              >
+                프로젝트 만들기
+              </h3>
+              <button
+                type="button"
+                class="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                aria-label="닫기"
+                @click="closeProjectForm"
+              >
+                <X class="h-5 w-5" />
+              </button>
+            </div>
+            <div class="space-y-4">
+              <div>
+                <Input
+                  v-model="projectName"
+                  placeholder="프로젝트 이름을 입력해주세요."
+                  class="w-full"
+                  @keydown.enter="handleProjectCreate"
+                />
+              </div>
+              <div
+                class="flex gap-3 rounded-md border border-transparent bg-muted/50 px-3 py-3 text-sm text-muted-foreground"
+              >
+                <Lightbulb class="h-5 w-5 shrink-0 text-amber-500" />
+                <p>
+                  프로젝트에서는 한 곳에 파일, 맞춤형 지침을 보관합니다.
+                  지속적으로 진행되는 작업에, 또는 작업을 깔끔히 정리하기에
+                  좋죠.
+                </p>
+              </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+              <Button
+                size="sm"
+                :disabled="!canCreateProject"
+                @click="handleProjectCreate"
+              >
+                프로젝트 만들기
+              </Button>
             </div>
           </div>
         </div>

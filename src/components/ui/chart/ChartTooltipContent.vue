@@ -22,7 +22,7 @@ const props = withDefaults(
     payload: () => ({}),
     config: () => ({}),
     indicator: "dot",
-  }
+  },
 );
 
 // TODO: currently we use `createElement` and `render` to render the
@@ -41,7 +41,7 @@ const payload = computed(() => {
 });
 
 const nestLabel = computed(
-  () => Object.keys(props.payload).length === 1 && props.indicator !== "dot"
+  () => Object.keys(props.payload).length === 1 && props.indicator !== "dot",
 );
 const tooltipLabel = computed(() => {
   if (props.hideLabel) return null;
@@ -58,8 +58,8 @@ const tooltipLabel = computed(() => {
   <div
     :class="
       cn(
-        'border-border/50 bg-background min-w-[8rem] rounded-lg border px-2.5 py-1.5 text-xs shadow-xl',
-        props.class
+        'border-0 bg-background min-w-[8rem] rounded-lg px-2.5 py-1.5 text-xs shadow-xl',
+        props.class,
       )
     "
   >
@@ -79,7 +79,7 @@ const tooltipLabel = computed(() => {
               'grid items-center gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5 [&>svg]:text-muted-foreground',
               indicator === 'line'
                 ? 'grid-cols-[4px_1fr_5rem]'
-                : 'grid-cols-[10px_1fr_5rem]'
+                : 'grid-cols-[10px_1fr_5rem]',
             )
           "
         >
@@ -98,7 +98,7 @@ const tooltipLabel = computed(() => {
                     'w-1 h-2.5': indicator === 'line',
                     'w-0 border-[1.5px] border-dashed bg-transparent h-2.5':
                       indicator === 'dashed',
-                  }
+                  },
                 )
               "
               :style="{

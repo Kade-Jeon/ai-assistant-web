@@ -12,17 +12,19 @@ import { LineChart } from "@/components/ui/chart-line";
 
 export interface DailyChartPoint {
   date: string;
-  usage: number;
-  total?: number;
-  input?: number;
-  output?: number;
+  total: number;
+  input: number;
+  output: number;
 }
 
 const props = defineProps<{
   selectedPeriod: PeriodType;
   periodOptions: Array<{ value: PeriodType; label: string }>;
   chartData: DailyChartPoint[];
+  /** 초기 로딩 (전체 스켈레톤) */
   isLoading: boolean;
+  /** 기간 변경 등 부분 재조회 중 (차트 영역만 오버레이) */
+  isRefetching?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -36,7 +38,7 @@ watch(
   (newValue) => {
     localSelectedPeriod.value = newValue;
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 watch(localSelectedPeriod, (newValue) => {
@@ -46,7 +48,7 @@ watch(localSelectedPeriod, (newValue) => {
 });
 
 const tooltipConfig = computed(() => ({
-  usage: { label: "Total", color: "hsl(var(--chart-1))" },
+  total: { label: "Total", color: "hsl(var(--chart-1))" },
   input: { label: "Input", color: "hsl(var(--chart-2))" },
   output: { label: "Output", color: "hsl(var(--chart-3))" },
 }));
@@ -110,22 +112,33 @@ function formatTooltipDate(value: unknown): string {
       >
         데이터를 불러올 수 없습니다.
       </div>
-      <LineChart
-        v-else
-        :data="chartData"
-        :categories="['usage']"
-        index="date"
-        :colors="['#3b82f6']"
-        :tooltip-config="tooltipConfig"
-        :tooltip-label-formatter="formatTooltipDate"
-        class="h-48 sm:h-64"
-        :show-legend="false"
-        :show-x-axis="true"
-        :show-y-axis="true"
-        :show-dots="true"
-        :show-tooltip="true"
-        :selected-period="selectedPeriod"
-      />
+      <div v-else class="relative">
+        <LineChart
+          :data="chartData"
+          :categories="['total']"
+          index="date"
+          :colors="['#3b82f6']"
+          :tooltip-config="tooltipConfig"
+          :tooltip-label-formatter="formatTooltipDate"
+          class="h-48 sm:h-64"
+          :show-legend="false"
+          :show-x-axis="true"
+          :show-y-axis="true"
+          :show-x-grid-line="false"
+          :show-grid-line="true"
+          :show-dots="true"
+          :show-tooltip="true"
+          :selected-period="selectedPeriod"
+        />
+        <div
+          v-if="isRefetching"
+          class="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-gray-900/60 rounded-lg"
+        >
+          <div
+            class="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"
+          />
+        </div>
+      </div>
     </div>
   </div>
 </template>

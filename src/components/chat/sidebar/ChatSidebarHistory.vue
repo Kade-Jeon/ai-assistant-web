@@ -21,13 +21,13 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <!-- 최근 대화 목록 -->
+  <!-- 최근대화 -->
   <div class="flex-1 overflow-y-auto p-4">
     <div class="space-y-2">
       <h3
         class="text-xs font-medium text-sidebar-foreground/70 uppercase tracking-wide"
       >
-        최근 대화
+        최근대화
       </h3>
       <div class="space-y-1">
         <div

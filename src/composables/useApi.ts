@@ -20,6 +20,24 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.DEV ? "" : "http://localhost:8080");
 
+/** 권한 없음 에러 메시지 */
+const PERMISSION_DENIED_MESSAGE = "권한이 없습니다.";
+
+/**
+ * userId를 검증하고 반환합니다.
+ * 쿠키에 userId가 없으면 에러 토스트를 표시하고 예외를 던집니다.
+ * @throws {Error} userId가 없을 때 권한 에러
+ * @returns 유효한 userId
+ */
+function requireUserId(): string {
+  const userId = getUserIdCookie();
+  if (!userId) {
+    showApiError(PERMISSION_DENIED_MESSAGE);
+    throw new Error(PERMISSION_DENIED_MESSAGE);
+  }
+  return userId;
+}
+
 /**
  * 쿠키에서 사용자 ID를 가져옵니다.
  * 쿠키에 없으면 환경변수 또는 기본값을 사용합니다 (하위 호환성).
@@ -57,7 +75,7 @@ const toChatRole = (role: string): ChatRole =>
  * - epoch ms/초 숫자도 지원.
  */
 function formatTimestamp(
-  timestamp: string | number | null | undefined
+  timestamp: string | number | null | undefined,
 ): string {
   if (timestamp === null || timestamp === undefined || timestamp === "")
     return "";
@@ -74,13 +92,13 @@ function formatTimestamp(
     date = new Date(ms);
   } else {
     const isoWithZ = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?Z$/i.test(
-      raw
+      raw,
     );
     if (isoWithZ) {
       date = new Date(raw.slice(0, -1));
     } else {
       const isoNoTz = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(\.\d+)?$/i.test(
-        raw
+        raw,
       );
       date = new Date(isoNoTz ? `${raw}Z` : raw);
     }
@@ -111,7 +129,7 @@ export const useApi = () => {
    */
   const login = async (
     emailId: string,
-    password: string
+    password: string,
   ): Promise<{ userId: string; emailId: string; plan: string }> => {
     const url = `${API_BASE_URL}/api/v1/auth/login`;
     try {
@@ -126,7 +144,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "로그인에 실패했습니다."
+          "로그인에 실패했습니다.",
         );
         throw new Error(message);
       }
@@ -168,17 +186,19 @@ export const useApi = () => {
   const getPreference = async (): Promise<PreferenceResponse> => {
     const url = `${API_BASE_URL}/api/v1/ai/pref`;
     try {
+      const userId = requireUserId();
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
-          "USER-ID": getUserId(),
+          "USER-ID": userId,
         },
       });
 
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "개인 맞춤 설정을 불러오는데 실패했습니다."
+          "개인 맞춤 설정을 불러오는데 실패했습니다.",
         );
         throw new Error(message);
       }
@@ -190,7 +210,9 @@ export const useApi = () => {
         error instanceof Error
           ? error.message
           : "개인 맞춤 설정을 불러오는데 실패했습니다.";
-      showApiError(msg);
+      if (msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
       console.error("개인 맞춤 설정 조회 실패:", error);
       throw error instanceof Error ? error : new Error(msg);
     }
@@ -201,15 +223,17 @@ export const useApi = () => {
    * POST /api/v1/ai/pref, USER-ID 헤더, body: PreferenceRequest.
    */
   const updatePreference = async (
-    request: PreferenceRequest
+    request: PreferenceRequest,
   ): Promise<PreferenceResponse> => {
     const url = `${API_BASE_URL}/api/v1/ai/pref`;
     try {
+      const userId = requireUserId();
+
       const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "USER-ID": getUserId(),
+          "USER-ID": userId,
         },
         body: JSON.stringify(request),
       });
@@ -217,7 +241,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "개인 맞춤 설정 저장에 실패했습니다."
+          "개인 맞춤 설정 저장에 실패했습니다.",
         );
         throw new Error(message);
       }
@@ -230,7 +254,9 @@ export const useApi = () => {
         error instanceof Error
           ? error.message
           : "개인 맞춤 설정 저장에 실패했습니다.";
-      showApiError(msg);
+      if (msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
       console.error("개인 맞춤 설정 저장 실패:", error);
       throw error instanceof Error ? error : new Error(msg);
     }
@@ -239,17 +265,23 @@ export const useApi = () => {
   /**
    * AI 통계를 조회합니다. 대시보드 Observation 데이터도 이 엔드포인트로 조회합니다.
    * GET /api/v1/ai/stat, USER-ID, X-USER-TIMEZONE 헤더 필요.
+   * userId(쿠키)가 없으면 API 호출 없이 권한 없음 에러를 던집니다.
+   * @param days - 지정 시 ?days=7 또는 ?days=15 로 일별 사용량 기간 제한
    */
-  const getAiStat = async (): Promise<unknown> => {
-    const url = `${API_BASE_URL}/api/v1/ai/stat`;
-    const timezone = getBrowserTimezone();
-    const headers: Record<string, string> = {
-      "USER-ID": getUserId(),
-    };
-    if (timezone) {
-      headers["X-USER-TIMEZONE"] = timezone;
-    }
+  const getAiStat = async (days?: 7 | 15): Promise<unknown> => {
     try {
+      const userId = requireUserId();
+
+      const baseUrl = `${API_BASE_URL}/api/v1/ai/stat`;
+      const url = days != null ? `${baseUrl}?days=${days}` : baseUrl;
+      const timezone = getBrowserTimezone();
+      const headers: Record<string, string> = {
+        "USER-ID": userId,
+      };
+      if (timezone) {
+        headers["X-USER-TIMEZONE"] = timezone;
+      }
+
       const response = await fetch(url, {
         method: "GET",
         headers,
@@ -258,7 +290,7 @@ export const useApi = () => {
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "AI 통계를 불러오는데 실패했습니다."
+          "AI 통계를 불러오는데 실패했습니다.",
         );
         throw new Error(message);
       }
@@ -270,7 +302,10 @@ export const useApi = () => {
         error instanceof Error
           ? error.message
           : "AI 통계를 불러오는데 실패했습니다.";
-      showApiError(msg);
+      // requireUserId에서 이미 토스트를 표시했으므로 권한 에러는 중복 표시 방지
+      if (msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
       console.error("AI 통계 조회 실패:", error);
       throw error instanceof Error ? error : new Error(msg);
     }
@@ -279,22 +314,25 @@ export const useApi = () => {
   /**
    * 대화 목록을 조회합니다.
    * GET /api/v1/ai/conv, USER-ID 헤더 필요.
+   * userId(쿠키)가 없으면 API 호출 없이 권한 없음 에러를 던집니다.
    * 응답을 ChatThread 형태(id, title, active, conversationId)로 변환해 반환합니다.
    */
   const fetchChatThreads = async (): Promise<ChatThread[]> => {
     const url = `${API_BASE_URL}/api/v1/ai/conv`;
     try {
+      const userId = requireUserId();
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
-          "USER-ID": getUserId(),
+          "USER-ID": userId,
         },
       });
 
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "채팅방 목록을 불러오는데 실패했습니다."
+          "채팅방 목록을 불러오는데 실패했습니다.",
         );
         throw new Error(message);
       }
@@ -311,7 +349,10 @@ export const useApi = () => {
         error instanceof Error
           ? error.message
           : "채팅방 목록을 불러오는데 실패했습니다.";
-      showApiError(msg);
+      // requireUserId에서 이미 토스트를 표시했으므로 권한 에러는 중복 표시 방지
+      if (msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
       console.error("채팅방 목록 조회 실패:", error);
       throw error instanceof Error ? error : new Error(msg);
     }
@@ -326,10 +367,12 @@ export const useApi = () => {
     const url = `${API_BASE_URL}/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
     let errorAlreadyShown = false;
     try {
+      const userId = requireUserId();
+
       const response = await fetch(url, {
         method: "DELETE",
         headers: {
-          "USER-ID": getUserId(),
+          "USER-ID": userId,
         },
       });
 
@@ -340,17 +383,17 @@ export const useApi = () => {
 
       const message = await parseApiErrorFromResponse(
         response,
-        "대화를 삭제하는 데 실패했습니다."
+        "대화를 삭제하는 데 실패했습니다.",
       );
       showApiError(message);
       errorAlreadyShown = true;
       throw new Error(message);
     } catch (error) {
-      if (!errorAlreadyShown) {
-        const msg =
-          error instanceof Error
-            ? error.message
-            : "대화를 삭제하는 데 실패했습니다.";
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "대화를 삭제하는 데 실패했습니다.";
+      if (!errorAlreadyShown && msg !== PERMISSION_DENIED_MESSAGE) {
         showApiError(msg);
       }
       console.error("대화 삭제 실패:", error);
@@ -367,16 +410,18 @@ export const useApi = () => {
    */
   const patchConversationSubject = async (
     conversationId: string,
-    subject: string
+    subject: string,
   ): Promise<void> => {
     const url = `${API_BASE_URL}/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
     let errorAlreadyShown = false;
     try {
+      const userId = requireUserId();
+
       const response = await fetch(url, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "USER-ID": getUserId(),
+          "USER-ID": userId,
         },
         body: JSON.stringify({ subject: subject.trim() }),
       });
@@ -388,15 +433,15 @@ export const useApi = () => {
 
       const message = await parseApiErrorFromResponse(
         response,
-        "제목 변경에 실패했습니다."
+        "제목 변경에 실패했습니다.",
       );
       showApiError(message);
       errorAlreadyShown = true;
       throw new Error(message);
     } catch (error) {
-      if (!errorAlreadyShown) {
-        const msg =
-          error instanceof Error ? error.message : "제목 변경에 실패했습니다.";
+      const msg =
+        error instanceof Error ? error.message : "제목 변경에 실패했습니다.";
+      if (!errorAlreadyShown && msg !== PERMISSION_DENIED_MESSAGE) {
         showApiError(msg);
       }
       console.error("제목 변경 실패:", error);
@@ -415,7 +460,7 @@ export const useApi = () => {
    */
   const fetchConversation = async (
     conversationId: string,
-    beforeTimestamp?: string | number
+    beforeTimestamp?: string | number,
   ): Promise<ChatMessage[]> => {
     // API_BASE_URL이 빈 문자열이면 상대 경로 사용 (프록시 환경)
     const basePath = `/api/v1/ai/conv/${encodeURIComponent(conversationId)}`;
@@ -439,17 +484,19 @@ export const useApi = () => {
     }
 
     try {
+      const userId = requireUserId();
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
-          "USER-ID": getUserId(),
+          "USER-ID": userId,
         },
       });
 
       if (!response.ok) {
         const message = await parseApiErrorFromResponse(
           response,
-          "대화 내용을 불러오는데 실패했습니다."
+          "대화 내용을 불러오는데 실패했습니다.",
         );
         throw new Error(message);
       }
@@ -473,7 +520,9 @@ export const useApi = () => {
         error instanceof Error
           ? error.message
           : "대화 내용을 불러오는데 실패했습니다.";
-      showApiError(msg);
+      if (msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
       console.error(`대화 내용 조회 실패 (${conversationId}):`, error);
       throw error instanceof Error ? error : new Error(msg);
     }
@@ -484,7 +533,7 @@ export const useApi = () => {
    * 형식: event: conversation_created\ndata: {"conversationId":"...","subject":"..."}
    */
   const consumeConversationCreatedEvent = (
-    buffer: string
+    buffer: string,
   ): { item: UserConversationItemDto | null; remainingBuffer: string } => {
     const segments = buffer.split(/\n\n/);
     const last = segments.pop() ?? "";
@@ -493,7 +542,7 @@ export const useApi = () => {
 
     for (const seg of segments) {
       const match = seg.match(
-        /event:\s*conversation_created\s*\ndata:\s*([\s\S]*)/i
+        /event:\s*conversation_created\s*\ndata:\s*([\s\S]*)/i,
       );
       const dataPart = match?.[1];
       if (dataPart !== undefined) {
@@ -528,7 +577,7 @@ export const useApi = () => {
    * @returns { found: 이벤트 발견 여부, remainingBuffer: 남은 버퍼 }
    */
   const consumeStreamCompleteEvent = (
-    buffer: string
+    buffer: string,
   ): { found: boolean; remainingBuffer: string } => {
     const segments = buffer.split(/\n\n/);
     const last = segments.pop() ?? "";
@@ -563,7 +612,7 @@ export const useApi = () => {
    * data는 JSON 문자열 (code, message, retryable).
    */
   const consumeErrorEvent = (
-    buffer: string
+    buffer: string,
   ): {
     found: boolean;
     code?: string;
@@ -622,7 +671,7 @@ export const useApi = () => {
    * data: { "conversationId": "..." }
    */
   const consumeAlreadyCompletedEvent = (
-    buffer: string
+    buffer: string,
   ): { found: boolean; conversationId?: string; remainingBuffer: string } => {
     const segments = buffer.split(/\n\n/);
     const last = segments.pop() ?? "";
@@ -632,7 +681,7 @@ export const useApi = () => {
 
     for (const seg of segments) {
       const match = seg.match(
-        /event:\s*already_completed\s*\ndata:\s*([\s\S]*)/i
+        /event:\s*already_completed\s*\ndata:\s*([\s\S]*)/i,
       );
       const dataPart = match?.[1];
       if (dataPart !== undefined) {
@@ -680,7 +729,7 @@ export const useApi = () => {
     onConversationCreated?: (item: UserConversationItemDto) => void,
     onAlreadyCompleted?: (conversationId: string) => void,
     file?: File,
-    idempotencyKey?: string
+    idempotencyKey?: string,
   ): Promise<void> => {
     const url = `${API_BASE_URL}/api/v1/ai/conv`;
 
@@ -692,12 +741,14 @@ export const useApi = () => {
       }
 
       try {
+        const userId = requireUserId();
+
         let requestBody: BodyInit;
         let headers: HeadersInit;
 
         const commonHeaders: HeadersInit = {
           Accept: "text/event-stream",
-          "USER-ID": getUserId(),
+          "USER-ID": userId,
           ...(idempotencyKey && {
             "X-Idempotency-Key": idempotencyKey,
           }),
@@ -736,7 +787,7 @@ export const useApi = () => {
         if (response.status === 409) {
           const message = await parseApiErrorFromResponse(
             response,
-            "동일한 Idempotency-Key로 요청이 이미 처리 중입니다."
+            "동일한 Idempotency-Key로 요청이 이미 처리 중입니다.",
           );
           const conflictError = new Error(message) as Error & {
             is409?: boolean;
@@ -748,7 +799,7 @@ export const useApi = () => {
         if (!response.ok) {
           const message = await parseApiErrorFromResponse(
             response,
-            `요청 처리에 실패했습니다. (${response.status})`
+            `요청 처리에 실패했습니다. (${response.status})`,
           );
           const err = new Error(message) as Error & { retryable?: boolean };
           err.retryable = response.status >= 500;
@@ -781,7 +832,7 @@ export const useApi = () => {
                 streamCompleted = true;
                 buffer = streamCompleteParsed.remainingBuffer;
                 console.log(
-                  "[SSE 스트림 완료] stream_complete 이벤트 발견, onComplete 호출"
+                  "[SSE 스트림 완료] stream_complete 이벤트 발견, onComplete 호출",
                 );
                 onComplete();
               }
@@ -792,7 +843,7 @@ export const useApi = () => {
               while (parsed.item) {
                 onConversationCreated(parsed.item);
                 parsed = consumeConversationCreatedEvent(
-                  parsed.remainingBuffer
+                  parsed.remainingBuffer,
                 );
               }
               buffer = parsed.remainingBuffer;
@@ -809,10 +860,10 @@ export const useApi = () => {
             // stream_complete 전에 연결이 끊기면 실패로 간주하고 재시도 대상
             if (!streamCompleted) {
               console.warn(
-                "[SSE 스트림] stream_complete 없이 연결 종료, 재시도 대상"
+                "[SSE 스트림] stream_complete 없이 연결 종료, 재시도 대상",
               );
               const dropErr = new Error(
-                "스트림이 완료되지 않고 연결이 끊겼습니다."
+                "스트림이 완료되지 않고 연결이 끊겼습니다.",
               ) as Error & { retryable?: boolean };
               dropErr.retryable = true;
               throw dropErr;
@@ -857,7 +908,7 @@ export const useApi = () => {
               streamCompleted = true;
               buffer = streamCompleteParsed.remainingBuffer;
               console.log(
-                "[SSE 스트림] stream_complete 이벤트 수신, onComplete 호출"
+                "[SSE 스트림] stream_complete 이벤트 수신, onComplete 호출",
               );
               onComplete();
             }
@@ -896,6 +947,8 @@ export const useApi = () => {
           // 버퍼 업데이트 (불완전한 JSON은 남김)
           buffer = remainingBuffer;
         }
+        // 정상적으로 스트림을 끝냈으므로 추가 재시도 없이 함수 종료
+        return;
       } catch (error) {
         const errorMessage =
           error instanceof Error
@@ -927,7 +980,7 @@ export const useApi = () => {
     }
 
     const finalError = new Error(
-      "요청이 실패했으며 재시도 횟수를 초과했습니다."
+      "요청이 실패했으며 재시도 횟수를 초과했습니다.",
     );
     showApiError(finalError.message);
     onError?.(finalError);

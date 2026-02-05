@@ -33,21 +33,25 @@ onUnmounted(clearTimer);
 </script>
 
 <template>
-  <Teleport to="#chat-toast-container">
-    <Transition
-      enter-active-class="transition duration-200 ease-out"
-      leave-active-class="transition duration-150 ease-in"
-      enter-from-class="opacity-0 scale-95"
-      enter-to-class="opacity-100 scale-100"
-      leave-from-class="opacity-100 scale-100"
-      leave-to-class="opacity-0 scale-95"
+  <Teleport to="body">
+    <div
+      class="fixed inset-0 pointer-events-none flex items-start justify-center pt-20 z-[100]"
+      aria-hidden="true"
     >
-      <div
-        v-if="currentToast"
-        class="pointer-events-auto relative flex w-full max-w-sm flex-col overflow-hidden rounded-lg border-0 px-4 py-3 text-white shadow-lg"
-        :class="currentToast.type === 'error' ? 'bg-red-300' : 'bg-blue-300'"
-        role="alert"
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        leave-active-class="transition duration-150 ease-in"
+        enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-95"
       >
+        <div
+          v-if="currentToast"
+          class="pointer-events-auto relative flex w-full max-w-sm flex-col overflow-hidden rounded-lg border-0 px-4 py-3 text-white shadow-lg"
+          :class="currentToast.type === 'error' ? 'bg-red-300' : 'bg-blue-300'"
+          role="alert"
+        >
         <div class="flex items-start gap-3">
           <p class="min-w-0 flex-1 text-sm font-bold">
             {{ currentToast.message }}
@@ -66,8 +70,9 @@ onUnmounted(clearTimer);
           :style="{ animationDuration: `${AUTO_CLOSE_MS}ms` }"
           aria-hidden="true"
         />
-      </div>
-    </Transition>
+        </div>
+      </Transition>
+    </div>
   </Teleport>
 </template>
 

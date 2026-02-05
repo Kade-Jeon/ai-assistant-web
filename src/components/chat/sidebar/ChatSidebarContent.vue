@@ -6,11 +6,12 @@ import type { ChatThread } from "@/types/chat";
 
 defineProps<{
   threads: ChatThread[];
-  currentView: "chat" | "dashboard" | "pricing";
+  currentView: "chat" | "dashboard" | "project" | "pricing";
 }>();
 
 defineEmits<{
   (e: "dashboard"): void;
+  (e: "new-project"): void;
   (e: "select-thread", conversationId: string): void;
   (e: "rename", conversationId: string): void;
   (e: "delete", conversationId: string): void;
@@ -19,7 +20,11 @@ defineEmits<{
 
 <template>
   <ChatSidebarSearch />
-  <ChatSidebarMenu :currentView="currentView" @dashboard="$emit('dashboard')" />
+  <ChatSidebarMenu
+    :currentView="currentView"
+    @dashboard="$emit('dashboard')"
+    @new-project="$emit('new-project')"
+  />
   <ChatSidebarHistory
     :threads="threads"
     @select-thread="$emit('select-thread', $event)"

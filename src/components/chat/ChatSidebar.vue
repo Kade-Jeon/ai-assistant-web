@@ -7,13 +7,14 @@ import type { ChatThread } from "@/types/chat";
 defineProps<{
   threads: ChatThread[];
   isOpen: boolean;
-  currentView: "chat" | "dashboard" | "pricing";
+  currentView: "chat" | "dashboard" | "project" | "pricing";
   userPlan?: string | null;
 }>();
 
 const emit = defineEmits<{
   (e: "new-chat"): void;
   (e: "dashboard"): void;
+  (e: "new-project"): void;
   (e: "select-thread", conversationId: string): void;
   (e: "rename", conversationId: string): void;
   (e: "delete", conversationId: string): void;
@@ -44,6 +45,7 @@ const handleDelete = (conversationId: string) => emit("delete", conversationId);
         :threads="threads"
         :currentView="currentView"
         @dashboard="emit('dashboard')"
+        @new-project="emit('new-project')"
         @select-thread="handleSelectThread"
         @rename="handleRename"
         @delete="handleDelete"
