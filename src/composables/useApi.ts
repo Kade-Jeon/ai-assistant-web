@@ -6,6 +6,13 @@ import type {
   UserConversationItemDto,
   ConversationMessageDto,
 } from "@/types/chat";
+import type {
+  CreateProjectResponseDto,
+  ProjectDocumentResponse,
+  ProjectDocumentItem,
+  ProjectItem,
+} from "@/types/project";
+import { toProjectDocumentItem } from "@/types/project";
 import { extractCompleteJsonFromBuffer } from "@/lib/chatCompletionParser";
 import {
   parseApiErrorFromResponse,
@@ -400,6 +407,255 @@ export const useApi = () => {
       throw error instanceof Error
         ? error
         : new Error("대화를 삭제하는 데 실패했습니다.");
+    }
+  };
+
+  /**
+   * 프로젝트를 생성합니다.
+   * POST /api/v1/ai/proj/create, USER-ID 헤더, body: CreateProjectRequest.
+   */
+  const createProject = async (
+    subject: string,
+  ): Promise<{ conversationId: string; subject: string }> => {
+    const url = `${API_BASE_URL}/api/v1/ai/proj/create`;
+    let errorAlreadyShown = false;
+    try {
+      const userId = requireUserId();
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "USER-ID": userId,
+        },
+        body: JSON.stringify({ subject: subject.trim() }),
+      });
+
+      if (!response.ok) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "프로젝트 생성에 실패했습니다.",
+        );
+        showApiError(message);
+        errorAlreadyShown = true;
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as {
+        conversationId?: string;
+        subject?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      };
+      const conversationId =
+        data?.conversationId != null ? String(data.conversationId) : "";
+      const subjectValue =
+        typeof data?.subject === "string" ? data.subject : subject.trim();
+      if (!conversationId) {
+        throw new Error("프로젝트 생성 응답에 conversationId가 없습니다.");
+      }
+      showApiSuccess("프로젝트가 생성되었습니다.");
+      return { conversationId, subject: subjectValue };
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "프로젝트 생성에 실패했습니다.";
+      if (!errorAlreadyShown && msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
+      console.error("프로젝트 생성 실패:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("프로젝트 생성에 실패했습니다.");
+    }
+  };
+
+  /**
+   * 프로젝트 목록을 조회합니다.
+   * GET /api/v1/ai/proj, USER-ID 헤더 필요.
+   * userId(쿠키)가 없으면 API 호출 없이 권한 없음 에러를 던집니다.
+   * 응답을 ProjectItem 형태(conversationId, subject)로 변환해 반환합니다.
+   */
+  const fetchProjectList = async (): Promise<ProjectItem[]> => {
+    const url = `${API_BASE_URL}/api/v1/ai/proj`;
+    try {
+      const userId = requireUserId();
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "USER-ID": userId,
+        },
+      });
+
+      if (!response.ok) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "프로젝트 목록을 불러오는데 실패했습니다.",
+        );
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as CreateProjectResponseDto[];
+      return (Array.isArray(data) ? data : []).map((item) => ({
+        conversationId:
+          item.conversationId != null ? String(item.conversationId) : "",
+        subject: typeof item.subject === "string" ? item.subject : "",
+      }));
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "프로젝트 목록을 불러오는데 실패했습니다.";
+      if (msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
+      console.error("프로젝트 목록 조회 실패:", error);
+      throw error instanceof Error ? error : new Error(msg);
+    }
+  };
+
+  /**
+   * 프로젝트에 문서를 추가합니다.
+   * POST /api/v1/ai/proj/{conversationId}/doc, USER-ID 헤더, RequestPart "file".
+   * 200 시 성공 토스트, 실패 시 에러 토스트 후 throw.
+   */
+  const addProjectDocument = async (
+    conversationId: string,
+    file: File,
+  ): Promise<void> => {
+    const url = `${API_BASE_URL}/api/v1/ai/proj/${encodeURIComponent(conversationId)}/doc`;
+    let errorAlreadyShown = false;
+    try {
+      const userId = requireUserId();
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "USER-ID": userId,
+        },
+        body: formData,
+      });
+
+      if (response.ok) {
+        showApiSuccess("문서가 추가되었습니다.");
+        return;
+      }
+
+      const message = await parseApiErrorFromResponse(
+        response,
+        "문서 추가에 실패했습니다.",
+      );
+      showApiError(message);
+      errorAlreadyShown = true;
+      throw new Error(message);
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "문서 추가에 실패했습니다.";
+      if (!errorAlreadyShown && msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
+      console.error("프로젝트 문서 추가 실패:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("문서 추가에 실패했습니다.");
+    }
+  };
+
+  /**
+   * 프로젝트에 RAG로 첨부된 문서 목록을 조회합니다.
+   * GET /api/v1/ai/proj/{conversationId}/doc, USER-ID 헤더 필요.
+   */
+  const getDocumentList = async (
+    conversationId: string,
+  ): Promise<ProjectDocumentItem[]> => {
+    const url = `${API_BASE_URL}/api/v1/ai/proj/${encodeURIComponent(conversationId)}/doc`;
+    try {
+      const userId = requireUserId();
+
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          "USER-ID": userId,
+        },
+      });
+
+      if (!response.ok) {
+        const message = await parseApiErrorFromResponse(
+          response,
+          "문서 목록을 불러오는데 실패했습니다.",
+        );
+        throw new Error(message);
+      }
+
+      const data = (await response.json()) as ProjectDocumentResponse[];
+      // 디버깅: API 응답 확인
+      console.log("문서 목록 API 응답:", data);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log("첫 번째 문서 항목:", data[0]);
+        console.log("documentId 값:", data[0]?.documentId);
+        console.log("documentId 타입:", typeof data[0]?.documentId);
+      }
+      return (Array.isArray(data) ? data : []).map(toProjectDocumentItem);
+    } catch (error) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "문서 목록을 불러오는데 실패했습니다.";
+      if (msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
+      console.error("문서 목록 조회 실패:", error);
+      throw error instanceof Error ? error : new Error(msg);
+    }
+  };
+
+  /**
+   * 프로젝트에서 문서를 삭제합니다.
+   * DELETE /api/v1/ai/proj/{conversationId}/doc/{documentId}, USER-ID 헤더 필요.
+   * 204 시 성공 토스트, 실패 시 에러 토스트 후 throw.
+   */
+  const deleteProjectDocument = async (
+    conversationId: string,
+    documentId: string,
+  ): Promise<void> => {
+    const url = `${API_BASE_URL}/api/v1/ai/proj/${encodeURIComponent(conversationId)}/doc/${encodeURIComponent(documentId)}`;
+    let errorAlreadyShown = false;
+    try {
+      const userId = requireUserId();
+
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          "USER-ID": userId,
+        },
+      });
+
+      if (response.status === 204) {
+        showApiSuccess("문서가 삭제되었습니다.");
+        return;
+      }
+
+      const message = await parseApiErrorFromResponse(
+        response,
+        "문서 삭제에 실패했습니다.",
+      );
+      showApiError(message);
+      errorAlreadyShown = true;
+      throw new Error(message);
+    } catch (error) {
+      const msg =
+        error instanceof Error ? error.message : "문서 삭제에 실패했습니다.";
+      if (!errorAlreadyShown && msg !== PERMISSION_DENIED_MESSAGE) {
+        showApiError(msg);
+      }
+      console.error("프로젝트 문서 삭제 실패:", error);
+      throw error instanceof Error
+        ? error
+        : new Error("문서 삭제에 실패했습니다.");
     }
   };
 
@@ -997,5 +1253,10 @@ export const useApi = () => {
     sendChatMessage,
     deleteConversation,
     patchConversationSubject,
+    createProject,
+    fetchProjectList,
+    addProjectDocument,
+    getDocumentList,
+    deleteProjectDocument,
   };
 };

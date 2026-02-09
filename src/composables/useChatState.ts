@@ -1,6 +1,7 @@
 import { computed, nextTick, onMounted, ref } from "vue";
 import type { AssistantRequest, ChatMessage, ChatThread } from "@/types/chat";
 import { PromptType } from "@/types/chat";
+import type { ProjectItem } from "@/types/project";
 import { useApi } from "@/composables/useApi";
 
 const createTimeLabel = () => {
@@ -30,6 +31,7 @@ const createId = () => crypto.randomUUID();
 export const useChatState = () => {
   const {
     fetchChatThreads,
+    fetchProjectList,
     fetchConversation,
     sendChatMessage,
     deleteConversation,
@@ -38,6 +40,7 @@ export const useChatState = () => {
 
   // 상태 관리
   const threads = ref<ChatThread[]>([]);
+  const projects = ref<ProjectItem[]>([]);
   const messages = ref<ChatMessage[]>([]);
   const messageInput = ref("");
   const isLoading = ref(false);
@@ -147,15 +150,18 @@ export const useChatState = () => {
     }
   };
 
-  // 초기 데이터 로딩
+  // 초기 데이터 로딩 (대화 목록 + 프로젝트 목록 병렬 조회)
   const loadInitialData = async () => {
     try {
       isLoading.value = true;
       error.value = null;
 
-      // 채팅방 목록 불러오기
-      const chatThreads = await fetchChatThreads();
+      const [chatThreads, projectList] = await Promise.all([
+        fetchChatThreads(),
+        fetchProjectList(),
+      ]);
       threads.value = chatThreads;
+      projects.value = projectList;
 
       // 첫 번째 대화방 자동 선택 (최근 대화)
       const firstThread = chatThreads[0];
@@ -171,7 +177,21 @@ export const useChatState = () => {
     }
   };
 
-  const sendMessage = async (content?: string, attachments?: File[]) => {
+  /** 프로젝트 목록만 다시 조회 (예: 프로젝트 생성 후 목록 갱신) */
+  const refreshProjects = async () => {
+    try {
+      projects.value = await fetchProjectList();
+    } catch (err) {
+      console.error("프로젝트 목록 갱신 실패:", err);
+    }
+  };
+
+  const sendMessage = async (
+    content?: string,
+    attachments?: File[],
+    projectConversationId?: string,
+    projectSubject?: string,
+  ) => {
     // 이미 AI 응답을 기다리고 있으면 전송하지 않음
     if (isWaitingForResponse.value || isLoading.value) {
       return;
@@ -208,18 +228,19 @@ export const useChatState = () => {
     };
     messages.value = [...messages.value, assistantMessage];
 
-    // 기존 대화방이면 conversationId 포함, 새 대화면 없음
+    // 프로젝트 대화: promptType PROJECT + conversationId·subject / 일반 대화: promptType CONVERSATION + 선택 시 conversationId
+    const isProjectChat = Boolean(projectConversationId);
     const activeThread = threads.value.find((thread) => thread.active);
-    const conversationId = activeThread?.conversationId;
+    const threadConversationId = activeThread?.conversationId;
 
-    // 기존 대화방에서 채팅 보냈을 때: 해당 방을 최근 대화 맨 위로 올림
-    if (conversationId) {
+    // 기존 대화방에서 채팅 보냈을 때: 해당 방을 최근 대화 맨 위로 올림 (일반 대화만)
+    if (!isProjectChat && threadConversationId) {
       const current = threads.value.find(
-        (t) => t.conversationId === conversationId,
+        (t) => t.conversationId === threadConversationId,
       );
       if (current) {
         const rest = threads.value.filter(
-          (t) => t.conversationId !== conversationId,
+          (t) => t.conversationId !== threadConversationId,
         );
         threads.value = [
           { ...current, active: true },
@@ -228,16 +249,26 @@ export const useChatState = () => {
       }
     }
 
-    const request: AssistantRequest = {
-      promptType: PromptType.CONVERSATION,
-      question: messageContent,
-      ...(conversationId && { conversationId }),
-    };
+    const request: AssistantRequest = isProjectChat
+      ? {
+          promptType: PromptType.PROJECT,
+          question: messageContent,
+          conversationId: projectConversationId,
+          ...(projectSubject && { subject: projectSubject }),
+        }
+      : {
+          promptType: PromptType.CONVERSATION,
+          question: messageContent,
+          ...(threadConversationId && { conversationId: threadConversationId }),
+        };
 
     console.log("[채팅 메시지 전송]", {
       request,
       messageContent,
-      conversationId: conversationId ?? "(새 대화)",
+      isProjectChat,
+      conversationId: isProjectChat
+        ? projectConversationId
+        : threadConversationId ?? "(새 대화)",
     });
 
     try {
@@ -381,10 +412,19 @@ export const useChatState = () => {
   };
 
   /** 전송 실패한 사용자 메시지 다시 보내기 */
-  const retryMessage = (msg: ChatMessage) => {
+  const retryMessage = (
+    msg: ChatMessage,
+    projectConversationId?: string,
+    projectSubject?: string,
+  ) => {
     if (msg.role !== "user" || msg.status !== "failed") return;
     messages.value = messages.value.filter((m) => m.id !== msg.id);
-    sendMessage(msg.content, msg.attachments ?? []);
+    sendMessage(
+      msg.content,
+      msg.attachments ?? [],
+      projectConversationId,
+      projectSubject,
+    );
   };
 
   const startNewChat = () => {
@@ -436,6 +476,8 @@ export const useChatState = () => {
     messageInput,
     messages,
     threads,
+    projects,
+    refreshProjects,
     isLoading,
     error,
     isWaitingForResponse,
@@ -444,6 +486,8 @@ export const useChatState = () => {
     sendMessage: sendMessage as (
       content?: string,
       attachments?: File[],
+      projectConversationId?: string,
+      projectSubject?: string,
     ) => void,
     retryMessage,
     startNewChat,

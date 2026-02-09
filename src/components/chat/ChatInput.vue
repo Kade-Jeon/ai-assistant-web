@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { Send } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ACCEPT_ATTACHMENT_EXTENSIONS } from "@/lib/fileAccept";
 import FileSelector from "./FileSelector.vue";
 import SelectedFilesList from "./SelectedFilesList.vue";
 
@@ -103,7 +104,7 @@ const removeFile = (index: number) => {
         multiple
         class="hidden"
         @change="handleFileChange"
-        accept=".doc,.docx,.hwp,.hwxp,.pdf,.ppt,.pptx,.xlsx,.xls,.txt"
+        :accept="ACCEPT_ATTACHMENT_EXTENSIONS"
       />
 
       <p class="mt-2 text-xs text-center text-muted-foreground">

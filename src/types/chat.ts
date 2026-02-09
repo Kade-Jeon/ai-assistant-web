@@ -2,13 +2,15 @@ export type ChatRole = "assistant" | "user"
 
 export enum PromptType {
   CONVERSATION = "CONVERSATION",
+  PROJECT = "PROJECT",
 }
 
-/** 채팅 전송 요청 (백엔드 AssistantRequest). 새 대화는 conversationId 없음, 기존 대화는 conversationId 포함 */
+/** 채팅 전송 요청 (백엔드 AssistantRequest). promptType, question, conversationId, subject 만 사용 (language 없음) */
 export interface AssistantRequest {
   promptType: PromptType
   question: string
   conversationId?: string
+  subject?: string
 }
 
 /** 백엔드 대화 목록 한 건 (GET /api/v1/ai/conv 응답 항목) */

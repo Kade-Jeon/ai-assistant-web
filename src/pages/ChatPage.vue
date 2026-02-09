@@ -3,16 +3,20 @@ import ChatHeader from "@/components/chat/ChatHeader.vue";
 import ChatInput from "@/components/chat/ChatInput.vue";
 import ChatMessageList from "@/components/chat/ChatMessageList.vue";
 import ChatSidebar from "@/components/chat/ChatSidebar.vue";
+import ProjectDocumentPanel from "@/components/chat/ProjectDocumentPanel.vue";
 import Dashboard from "@/components/Dashboard.vue";
 import PricingPage from "@/pages/PricingPage.vue";
+import { ACCEPT_ATTACHMENT_EXTENSIONS } from "@/lib/fileAccept";
+import type { ProjectDocumentItem } from "@/types/project";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Lightbulb, X } from "lucide-vue-next";
+import { showApiError } from "@/composables/useApiError";
 import { useApi } from "@/composables/useApi";
 import { useChatState } from "@/composables/useChatState";
 import { useSidebarState } from "@/composables/useSidebarState";
 import { useTheme } from "@/composables/useTheme";
-import { inject } from "vue";
+import { inject, watch } from "vue";
 import { computed, nextTick, ref } from "vue";
 
 const { isDark, toggleTheme } = useTheme();
@@ -21,12 +25,22 @@ const { isSidebarOpen, isMobile } = useSidebarState();
 const auth =
   inject<ReturnType<typeof import("@/composables/useAuth").useAuth>>("auth")!;
 const { logout, userPlan } = auth;
-const { getPreference, updatePreference, getAiStat } = useApi();
+const {
+  getPreference,
+  updatePreference,
+  getAiStat,
+  createProject,
+  addProjectDocument,
+  getDocumentList,
+  deleteProjectDocument,
+} = useApi();
 const {
   canSend,
   messageInput,
   messages,
   threads,
+  projects,
+  refreshProjects,
   isLoading,
   isLoadingMore,
   hasMoreMessages,
@@ -42,6 +56,16 @@ const {
 
 // 현재 뷰 상태 ('chat' | 'dashboard' | 'project' | 'pricing')
 const currentView = ref<"chat" | "dashboard" | "project" | "pricing">("chat");
+
+// 일반 대화·프로젝트 대화 모두 동일한 채팅 화면 사용
+const isChatAreaVisible = computed(
+  () => currentView.value === "chat" || currentView.value === "project",
+);
+
+// 프로젝트 대화 시 전송용 (conversationId, subject)
+const selectedProject = computed(() =>
+  projects.value.find((p) => p.conversationId === selectedProjectId.value),
+);
 
 // 제목 변경 플로팅 폼
 const renamingConversationId = ref<string | null>(null);
@@ -102,7 +126,20 @@ const closeCustomizeForm = () => {
 
 // 프로젝트 만들기 플로팅 폼
 const isProjectFormOpen = ref(false);
+const isProjectFormLoading = ref(false);
 const projectName = ref("");
+
+const selectedProjectId = ref<string | null>(null);
+
+// 프로젝트 문서 패널 (RAG): 패널 열림 상태, 문서 목록, 업로드 중/조회 중 여부
+const isDocumentPanelOpen = ref(false);
+const projectDocuments = ref<ProjectDocumentItem[]>([]);
+const isAddingDocument = ref(false);
+const isDocumentsLoading = ref(false);
+
+// 문서 삭제 확인 다이얼로그
+const deletingDocumentId = ref<string | null>(null);
+const deletingDocumentName = ref<string>("");
 
 const openProjectForm = () => {
   isProjectFormOpen.value = true;
@@ -114,14 +151,68 @@ const closeProjectForm = () => {
   projectName.value = "";
 };
 
-const handleProjectCreate = () => {
+const handleProjectCreate = async (event?: KeyboardEvent) => {
+  if (event?.isComposing) return;
   const name = projectName.value.trim();
   if (!name) return;
-  // TODO: 프로젝트 생성 API 연동
-  closeProjectForm();
+  if (isProjectFormLoading.value) return;
+  isProjectFormLoading.value = true;
+  try {
+    await createProject(name);
+    await refreshProjects();
+    closeProjectForm();
+  } catch {
+    // 에러는 useApi에서 토스트로 표시됨
+  } finally {
+    isProjectFormLoading.value = false;
+  }
 };
 
 const canCreateProject = computed(() => projectName.value.trim().length > 0);
+
+const fetchProjectDocuments = async (conversationId: string) => {
+  isDocumentsLoading.value = true;
+  try {
+    projectDocuments.value = await getDocumentList(conversationId);
+  } catch {
+    projectDocuments.value = [];
+  } finally {
+    isDocumentsLoading.value = false;
+  }
+};
+
+watch(selectedProjectId, (id) => {
+  if (id == null) {
+    projectDocuments.value = [];
+    return;
+  }
+  fetchProjectDocuments(id);
+});
+
+const handleSelectProject = async (projectId: string) => {
+  try {
+    await selectThread(projectId);
+  } catch {
+    /* 에러는 useChatState에서 error 상태 및 토스트로 처리 */
+  }
+  selectedProjectId.value = projectId;
+  currentView.value = "project";
+  isDocumentPanelOpen.value = false;
+  clearThreadSelection();
+  if (isMobile.value) {
+    nextTick(() => {
+      isSidebarOpen.value = false;
+    });
+  }
+};
+
+const handleRenameProject = (_projectId: string) => {
+  // TODO: 프로젝트 이름 변경 API 연동 시 구현
+};
+
+const handleDeleteProject = (_projectId: string) => {
+  // TODO: 프로젝트 삭제 API 연동 시 구현
+};
 
 const handleCustomizeConfirm = async () => {
   try {
@@ -161,6 +252,12 @@ const handleViewChange = (
     clearThreadSelection();
   }
 
+  // 프로젝트 뷰가 아닌 다른 뷰로 이동 시 프로젝트 선택 해제 및 문서 패널 닫기
+  if (view !== "project") {
+    selectedProjectId.value = null;
+    isDocumentPanelOpen.value = false;
+  }
+
   currentView.value = view;
   console.log("변경 후 view:", currentView.value);
 
@@ -198,21 +295,87 @@ const handlePricingBack = () => {
 const handleHelp = (_section?: string) => {
   // 도움말 섹션별 처리 (center, release-notes, terms, support, bug) 추후 연결
 };
+
+const handleToggleDocuments = () => {
+  isDocumentPanelOpen.value = !isDocumentPanelOpen.value;
+};
+
+const handleDocumentPanelClose = () => {
+  isDocumentPanelOpen.value = false;
+};
+
+const handleDocumentFilesSelected = async (files: File[]) => {
+  if (!files.length) return;
+  if (!selectedProject.value?.conversationId) {
+    showApiError("프로젝트가 선택되지 않았습니다.");
+    return;
+  }
+
+  isAddingDocument.value = true;
+  try {
+    for (const file of files) {
+      await addProjectDocument(selectedProject.value.conversationId, file);
+    }
+    await fetchProjectDocuments(selectedProject.value.conversationId);
+  } catch {
+    /* 에러는 useApi에서 토스트로 표시 */
+  } finally {
+    isAddingDocument.value = false;
+  }
+};
+
+const openDeleteDocumentDialog = (id: string) => {
+  const doc = projectDocuments.value.find((d) => d.id === id);
+  if (!doc) return;
+  deletingDocumentId.value = id;
+  deletingDocumentName.value = doc.name;
+};
+
+const closeDeleteDocumentDialog = () => {
+  deletingDocumentId.value = null;
+  deletingDocumentName.value = "";
+};
+
+const handleDeleteDocument = async () => {
+  const id = deletingDocumentId.value;
+  if (!id || id === "undefined") {
+    showApiError("문서 ID가 유효하지 않습니다.");
+    closeDeleteDocumentDialog();
+    return;
+  }
+  if (!selectedProject.value?.conversationId) {
+    showApiError("프로젝트가 선택되지 않았습니다.");
+    return;
+  }
+
+  try {
+    await deleteProjectDocument(selectedProject.value.conversationId, id);
+    projectDocuments.value = projectDocuments.value.filter((d) => d.id !== id);
+    closeDeleteDocumentDialog();
+  } catch {
+    // 에러는 useApi에서 토스트로 표시됨
+  }
+};
 </script>
 
 <template>
   <div class="flex h-screen">
     <ChatSidebar
       :threads="threads"
+      :projects="projects"
       :is-open="isSidebarOpen"
       :currentView="currentView"
+      :selectedProjectId="selectedProjectId"
       :user-plan="userPlan"
       @new-chat="handleNewChat"
       @dashboard="handleDashboard"
       @new-project="openProjectForm"
       @select-thread="handleSelectThread"
+      @select-project="handleSelectProject"
       @rename="openRenameForm"
+      @rename-project="handleRenameProject"
       @delete="deleteThread"
+      @delete-project="handleDeleteProject"
       @customize="openCustomizeForm"
       @plan-upgrade="handlePlanUpgrade"
       @help="handleHelp"
@@ -222,15 +385,34 @@ const handleHelp = (_section?: string) => {
       <ChatHeader
         :is-dark="isDark"
         :is-sidebar-open="isSidebarOpen"
+        :center-title="
+          currentView === 'project' && selectedProject
+            ? `프로젝트 ${selectedProject.subject}`
+            : undefined
+        "
+        :show-document-button="currentView === 'project' && !!selectedProject"
+        :is-document-panel-open="isDocumentPanelOpen"
+        :document-count="projectDocuments.length"
         @toggle-theme="toggleTheme"
         @toggle-sidebar="isSidebarOpen = !isSidebarOpen"
+        @toggle-documents="handleToggleDocuments"
       />
       <div class="flex-1 flex flex-col min-h-0">
-        <!-- 채팅 뷰: 버블 영역 기준 토스트용 컨테이너 -->
+        <!-- 채팅 뷰 (일반 대화 + 프로젝트 대화 동일 화면, 전송 시에만 projectId 여부로 구분) -->
         <div
-          v-show="currentView === 'chat'"
-          class="flex-1 flex flex-col min-h-0"
+          v-if="isChatAreaVisible"
+          class="flex-1 flex flex-col min-h-0 w-full"
         >
+          <ProjectDocumentPanel
+            v-if="currentView === 'project'"
+            :is-open="isDocumentPanelOpen"
+            :documents="projectDocuments"
+            :is-loading="isAddingDocument || isDocumentsLoading"
+            :accept="ACCEPT_ATTACHMENT_EXTENSIONS"
+            @files-selected="handleDocumentFilesSelected"
+            @delete-document="openDeleteDocumentDialog"
+            @close="handleDocumentPanelClose"
+          />
           <div class="flex-1 min-h-0 relative flex flex-col">
             <ChatMessageList
               :messages="messages"
@@ -238,20 +420,20 @@ const handleHelp = (_section?: string) => {
               :is-loading="isLoading"
               :is-loading-more="isLoadingMore"
               :has-more-messages="hasMoreMessages"
-              @retry="retryMessage"
+              @retry="(msg) => retryMessage(msg, selectedProject?.conversationId, selectedProject?.subject)"
               @load-more="loadMoreMessages"
             />
           </div>
           <ChatInput
             v-model="messageInput"
             :can-send="canSend"
-            @send="(value, attachments) => sendMessage(value, attachments)"
+            @send="(value, attachments) => sendMessage(value, attachments, selectedProject?.conversationId, selectedProject?.subject)"
           />
         </div>
 
         <!-- 대시보드 뷰 -->
         <div
-          v-show="currentView === 'dashboard'"
+          v-if="currentView === 'dashboard'"
           class="flex-1 overflow-y-auto"
         >
           <Dashboard
@@ -260,17 +442,9 @@ const handleHelp = (_section?: string) => {
           />
         </div>
 
-        <!-- 프로젝트 뷰 -->
-        <div
-          v-show="currentView === 'project'"
-          class="flex-1 overflow-y-auto flex flex-col items-center justify-center text-muted-foreground"
-        >
-          <p class="text-sm">프로젝트 화면 (준비 중)</p>
-        </div>
-
         <!-- 가격(플랜 업그레이드) 뷰 -->
         <div
-          v-show="currentView === 'pricing'"
+          v-if="currentView === 'pricing'"
           class="flex-1 flex flex-col min-h-0 overflow-hidden"
         >
           <PricingPage :user-plan="userPlan" @back="handlePricingBack" />
@@ -472,7 +646,7 @@ const handleHelp = (_section?: string) => {
                   v-model="projectName"
                   placeholder="프로젝트 이름을 입력해주세요."
                   class="w-full"
-                  @keydown.enter="handleProjectCreate"
+                  @keydown.enter.prevent="handleProjectCreate($event)"
                 />
               </div>
               <div
@@ -489,10 +663,58 @@ const handleHelp = (_section?: string) => {
             <div class="mt-6 flex justify-end">
               <Button
                 size="sm"
-                :disabled="!canCreateProject"
+                :disabled="!canCreateProject || isProjectFormLoading"
                 @click="handleProjectCreate"
               >
-                프로젝트 만들기
+                {{ isProjectFormLoading ? "생성 중..." : "프로젝트 만들기" }}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 문서 삭제 확인 다이얼로그 -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        leave-active-class="transition duration-150 ease-in"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="deletingDocumentId"
+          class="fixed inset-0 z-[110] flex items-center justify-center bg-black/20 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-document-title"
+          @click.self="closeDeleteDocumentDialog"
+        >
+          <div
+            class="w-full max-w-sm rounded-lg border bg-card p-4 shadow-lg"
+            @click.stop
+          >
+            <h3
+              id="delete-document-title"
+              class="mb-3 text-sm font-medium text-foreground"
+            >
+              문서 삭제
+            </h3>
+            <p class="mb-4 text-sm text-muted-foreground">
+              {{ deletingDocumentName }} 를 삭제하시겠습니까? 삭제하면 복구가 불가능합니다.
+            </p>
+            <div class="flex justify-end gap-2">
+              <Button variant="outline" size="sm" @click="closeDeleteDocumentDialog">
+                취소
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                @click="handleDeleteDocument"
+              >
+                삭제
               </Button>
             </div>
           </div>
